@@ -103,6 +103,8 @@ func RegisterUser(client *mongo.Client) gin.HandlerFunc{
 		user.IsVerified=false
 		user.Role="user"
 		user.OTPHash=otpHash
+		user.OTPExpiry = time.Now().Add(10 * time.Minute)
+
 
 
 		_,err=userCollection.InsertOne(ctx,user)
