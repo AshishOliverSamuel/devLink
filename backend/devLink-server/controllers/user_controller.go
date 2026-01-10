@@ -2,11 +2,12 @@ package controllers
 
 import (
 	"context"
-	"fmt"
 	"crypto/rand"
+	"fmt"
+	"math/big"
 	"net/http"
 	"time"
-	"math/big"
+	"github.com/ayushmehta03/devLink-backend/utils"
 
 	"github.com/ayushmehta03/devLink-backend/database"
 	"github.com/ayushmehta03/devLink-backend/models"
@@ -104,14 +105,22 @@ func RegisterUser(client *mongo.Client) gin.HandlerFunc{
 		user.OTPHash=otpHash
 
 
-		result,err:=userCollection.InsertOne(ctx,user)
+		_,err=userCollection.InsertOne(ctx,user)
 
 		if err!=nil{
 			c.JSON(http.StatusInternalServerError,gin.H{"error":"Failed to register error"})
 			return
 		}
 
-		c.JSON(http.StatusCreated,result);
+
+		err=utils.SendOTPEmail(user.Email,otp)
+
+		if err!=nil{
+			fmt.Println("Failed to send OTP email:",err)
+		}
+
+
+		c.JSON(http.StatusCreated,gin.H{"message":"User registered. Please verify OTP sent to email"});
 
 
 
