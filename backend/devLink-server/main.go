@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"log"
 
-	"github.com/ayushmehta03/devLink-backend/controllers"
 	"github.com/ayushmehta03/devLink-backend/database"
+	"github.com/ayushmehta03/devLink-backend/routes"
 	"github.com/gin-gonic/gin"
 )
 
@@ -26,10 +26,10 @@ func main() {
 		}
 	}()
 
-	router.POST("/register",controllers.RegisterUser(client))
-	router.POST("/verify-otp",controllers.VerifyOtp(client))
-	router.POST("/resend-otp",controllers.ResendOtp(client))
-	router.POST("/login",controllers.LoginUser(client))
+
+	routes.AuthRoutes(router,client)
+	routes.ProtectedRoutes(router,client)
+	
 	if err:=router.Run(":8080");err!=nil{
 		fmt.Println("Failed to start server",err)
 	}
