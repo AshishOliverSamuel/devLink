@@ -3,6 +3,7 @@ package controllers
 import (
 	"context"
 	"net/http"
+	"regexp"
 	"strings"
 	"time"
 
@@ -34,7 +35,7 @@ func CreatePost(client *mongo.Client) gin.HandlerFunc{
 
 		post.ID=bson.NewObjectID()
 		post.AuthorID,_=bson.ObjectIDFromHex(userId.(string))
-		post.Slug=strings.ToLower(strings.ReplaceAll(post.Title," ","-"))
+		post.Slug=GenerateSlug(post.Title)
 		post.ViewCount=0
 		post.CreatedAt=time.Now()
 		post.UpdatedAt=time.Now()
@@ -96,4 +97,53 @@ func GetAllPosts(client *mongo.Client) gin.HandlerFunc{
 		c.JSON(http.StatusOK,posts)
 
 	}
+}
+
+
+func GetPostBySlug(client *mongo.Client) gin.HandlerFunc{
+	return func (c*gin.Context){
+		slug:=c.Param("slug")
+
+
+
+		ctx,cancel:=context.WithTimeout(context.Background(),10*time.Second)
+
+		defer cancel()
+
+
+		collection:=database.OpenCollection("posts",client)
+
+		var post models.Post
+
+
+		err := collection.FindOneAndUpdate(
+			ctx,
+			bson.M{"slug": slug, "published": true},
+			bson.M{"$inc": bson.M{"view_count": 1}},
+		).Decode(&post)
+
+
+		if err!=nil{
+			c.JSON(http.StatusNotFound,gin.H{"error":"Post not found"})
+			return 
+		}
+
+		c.JSON(http.StatusOK,post)
+
+}
+}
+
+
+
+func GenerateSlug(title string) string {
+
+
+    slug := strings.ToLower(title)
+    
+    reg, _ := regexp.Compile("[^a-z0-9 ]+")
+    slug = reg.ReplaceAllString(slug, "")
+    
+    slug = strings.ReplaceAll(slug, " ", "-")
+    
+    return strings.Trim(slug, "-")
 }

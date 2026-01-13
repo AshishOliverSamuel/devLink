@@ -17,7 +17,6 @@ type Post struct {
 	Content string `bson:"content" json:"content" validate:"required"`
 
 	AuthorID bson.ObjectID `bson:"author_id" json:"author_id"`
-	AuthorName string        `bson:"author_name" json:"author_name"`
 
 
 	Tags []string `bson:"tags,omitempty" json:"tags,omitempty"`
