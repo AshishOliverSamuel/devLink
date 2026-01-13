@@ -2,6 +2,8 @@ package controllers
 
 import (
 	"context"
+	"crypto/rand"
+	"fmt"
 	"net/http"
 	"regexp"
 	"strings"
@@ -35,7 +37,7 @@ func CreatePost(client *mongo.Client) gin.HandlerFunc{
 
 		post.ID=bson.NewObjectID()
 		post.AuthorID,_=bson.ObjectIDFromHex(userId.(string))
-		post.Slug=GenerateSlug(post.Title)
+		post.Slug=GenerateUniqueSlug(post.Title)
 		post.ViewCount=0
 		post.CreatedAt=time.Now()
 		post.UpdatedAt=time.Now()
@@ -146,4 +148,14 @@ func GenerateSlug(title string) string {
     slug = strings.ReplaceAll(slug, " ", "-")
     
     return strings.Trim(slug, "-")
+}
+
+func GenerateUniqueSlug(title string) string {
+    baseSlug := GenerateSlug(title) 
+    
+    b := make([]byte, 2)
+    rand.Read(b)
+    randomID := fmt.Sprintf("%x", b)
+    
+    return fmt.Sprintf("%s-%s", baseSlug, randomID)
 }
