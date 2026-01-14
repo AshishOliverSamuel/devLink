@@ -4,7 +4,7 @@ import (
 	
 	"net/http"
 	"os"
-	"strings"
+
 
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"
@@ -12,29 +12,20 @@ import (
 
 
 
-func AuthMiddleWare()gin.HandlerFunc{
-	return func(c* gin.Context){
+func AuthMiddleWare() gin.HandlerFunc {
+	return func(c *gin.Context) {
 
-		authHeader:=c.GetHeader("Authorization")
-		if authHeader==""{
-			c.JSON(http.StatusUnauthorized,gin.H{"error":"Authorization header missing"})
+	
+		tokenString, err := c.Cookie("access_token")
+		if err != nil {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "Authentication required"})
 			c.Abort()
-			return 
-		}
-		
-
-		parts:=strings.Split(authHeader," ")
-
-		if len(parts)!=2 || parts[0]!="Bearer"{
-			c.JSON(http.StatusUnauthorized,gin.H{"error":"Invalid authorization format"})
-			c.Abort()
-			return 
+			return
 		}
 
-		tokenString:=parts[1]
-		secret:=os.Getenv("JWT_SECRET");
+		secret := os.Getenv("JWT_SECRET")
 
-token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
+		token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
 			if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
 				return nil, jwt.ErrSignatureInvalid
 			}
@@ -54,12 +45,11 @@ token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error)
 			return
 		}
 
+		// 🔓 Set user data in context
 		c.Set("user_id", claims["user_id"])
 		c.Set("email", claims["email"])
 		c.Set("role", claims["role"])
 
 		c.Next()
-
-
 	}
 }

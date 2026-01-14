@@ -329,8 +329,19 @@ func LoginUser(client *mongo.Client) gin.HandlerFunc{
 			return 
 		}
 
+		c.SetCookie(
+			"access_token", // cookie name
+			token,          // value
+			3600*24,        // expiry (1 day)
+			"/",            // path
+			"",             // domain (empty = current domain)
+			false,          // secure (true in production HTTPS)
+			true,           // httpOnly (VERY IMPORTANT)
+		)
+
+
 		c.JSON(http.StatusOK, gin.H{
-			"token": token,
+			"message": "Login successful",
 			"user": gin.H{
 				"id":    user.Id.Hex(),
 				"name":  user.UserName,
@@ -341,6 +352,25 @@ func LoginUser(client *mongo.Client) gin.HandlerFunc{
 
 
 
+	}
+}
+
+func LogoutUser() gin.HandlerFunc {
+	return func(c *gin.Context) {
+
+		c.SetCookie(
+			"access_token",
+			"",
+			-1,
+			"/",
+			"",
+			false,
+			true,
+		)
+
+		c.JSON(http.StatusOK, gin.H{
+			"message": "Logged out successfully",
+		})
 	}
 }
 
