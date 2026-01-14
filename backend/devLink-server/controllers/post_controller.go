@@ -159,3 +159,107 @@ func GenerateUniqueSlug(title string) string {
     
     return fmt.Sprintf("%s-%s", baseSlug, randomID)
 }
+
+
+func UpdatePost(client *mongo.Client)gin.HandlerFunc{
+	return func(c*gin.Context){
+
+		postId:=c.Param("id")
+
+		userId,exists:=c.Get("user_id")
+
+		if !exists{
+			c.JSON(http.StatusUnauthorized,gin.H{"error":"Unauthorized "})
+			return 
+		}
+		postObjId,err:=bson.ObjectIDFromHex(postId)
+
+
+		if err!=nil{
+			c.JSON(http.StatusBadRequest,gin.H{"error":"Invalid post id"})
+			return 
+		}
+
+
+		userObjId,_:=bson.ObjectIDFromHex(userId.(string))
+
+		var updateData struct {
+			Title     string   `json:"title"`
+			Content   string   `json:"content"`
+			ImageURL  string   `json:"image_url"`
+			Tags      []string `json:"tags"`
+			Published bool     `json:"published"`
+		}
+
+		if err := c.ShouldBindJSON(&updateData); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid input"})
+			return
+		}
+
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+
+		collection := database.OpenCollection("posts", client)
+
+		var post models.Post
+		err = collection.FindOne(ctx, bson.M{"_id": postObjId}).Decode(&post)
+		if err != nil {
+			c.JSON(http.StatusNotFound, gin.H{"error": "Post not found"})
+			return
+		}
+
+
+		if post.AuthorID != userObjId {
+			c.JSON(http.StatusForbidden, gin.H{"error": "You are not allowed to update this post"})
+			return
+		}
+
+		// 5️⃣ Prepare update fields
+		update := bson.M{
+			"$set": bson.M{
+				"title":      updateData.Title,
+				"content":    updateData.Content,
+				"image_url":  updateData.ImageURL,
+				"tags":       updateData.Tags,
+				"published":  updateData.Published,
+				"updated_at": time.Now(),
+				"slug":      GenerateUniqueSlug(updateData.Title),
+			},
+		}
+
+		_, err = collection.UpdateOne(ctx, bson.M{"_id": postObjId}, update)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update post"})
+			return
+		}
+
+		c.JSON(http.StatusOK, gin.H{"message": "Post updated successfully"})
+
+
+
+		
+	}
+}
+
+func DeletePost(client *mongo.Client)gin.HandlerFunc{
+	return func(c*gin.Context){
+		userId,exits:=c.Get("user_id")
+
+		if !exits{
+			c.JSON(http.StatusUnauthorized,gin.H{"error":"Unauthorized"})
+			return 
+		}
+
+
+		postId:=c.Param("id")
+
+
+		postObjId,err:=bson.ObjectIDFromHex(postId)
+
+		if err!=nil{
+			c.JSON(http.StatusBadRequest)
+		}
+	}
+
+}
+
