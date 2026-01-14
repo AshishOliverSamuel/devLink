@@ -63,3 +63,53 @@ c.JSON(http.StatusOK, gin.H{
 			"posts": posts,
 		})	}
 }
+
+func SearchUsers(client *mongo.Client)gin.HandlerFunc{
+	return func(c *gin.Context){
+
+		query:=c.Query("q")
+
+		if query==""{
+			c.JSON(http.StatusBadRequest,gin.H{"error":"Query missing"})
+			return 
+		}
+
+		ctx,cancel:=context.WithTimeout(context.Background(),10*time.Second)
+		defer cancel()
+
+
+		userCollection:=database.OpenCollection("users",client)
+
+		filter:=bson.M{
+			"name":bson.M{
+				"$regex":query,
+				"$options":"i",
+			},
+		}
+
+		cursor,err:=userCollection.Find(ctx,filter)
+
+		if err!=nil{
+			c.JSON(http.StatusInternalServerError,gin.H{"error":"Search failed"})
+			return 
+		}
+
+		defer cursor.Close(ctx)
+
+
+		var users []gin.H
+
+		for cursor.Next(ctx){
+			var user models.User
+			cursor.Decode(&user)
+		
+
+		users=append(users, gin.H{
+			"name":user.UserName,
+			"bio":user.Bio,
+		})
+	}
+
+	c.JSON(http.StatusOK,users)
+	}
+}
