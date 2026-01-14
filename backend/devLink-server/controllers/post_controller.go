@@ -302,3 +302,42 @@ func DeletePost(client *mongo.Client)gin.HandlerFunc{
 
 }
 
+func GetArchivePosts(client *mongo.Client) gin.HandlerFunc{
+	return func(c *gin.Context){
+
+		userId,exists:=c.Get("user_id")
+
+		if !exists{
+			c.JSON(http.StatusUnauthorized,gin.H{"error":"Unauthorized"})
+			return 
+		}
+
+		authorId,_:=bson.ObjectIDFromHex(userId.(string))
+
+		ctx,cancel:=context.WithTimeout(context.Background(),10*time.Second)
+
+		defer cancel();
+
+		filter:=bson.M{
+			"author_id":authorId,
+			"published":false,
+		}
+
+		collection:=database.OpenCollection("posts",client)
+
+		cursor,err:=collection.Find(ctx,filter)
+
+		if err!=nil{
+			c.JSON(http.StatusInternalServerError,gin.H{"error":"Failed to fetch archive at this momnent"})
+			return 
+		}
+
+		defer cursor.Close(ctx)
+
+		var posts []models.Post
+
+		cursor.All(ctx,&posts)
+
+		c.JSON(http.StatusOK,posts)
+	}
+}
