@@ -113,3 +113,62 @@ func SearchUsers(client *mongo.Client)gin.HandlerFunc{
 	c.JSON(http.StatusOK,users)
 	}
 }
+
+
+func SearchPost(client *mongo.Client) gin.HandlerFunc{
+	return func (c *gin.Context){
+
+		query:=c.Query("t");
+
+		if query==""{
+			c.JSON(http.StatusBadRequest,gin.H{"error":"Search query missing"})
+			return 
+		}
+
+		ctx,cancel:=context.WithTimeout(context.Background(),10*time.Second);
+		defer cancel()
+
+
+		postCollection:=database.OpenCollection("posts",client)
+		
+
+		filters:=bson.M{
+			"tags":bson.M{
+				"$regex":query,
+				"$otpions":"i",
+			},
+
+		
+		}
+
+		cursor,err:=postCollection.Find(ctx,filters)
+
+
+		if err!=nil{
+			c.JSON(http.StatusInternalServerError,gin.H{"error":"Search failed"})
+			return 
+		}
+				defer cursor.Close(ctx)
+
+
+			var posts []gin.H
+
+			for cursor.Next(ctx){
+				var post models.Post
+				cursor.Decode(&post)
+
+				posts=append(posts, gin.H{
+				"title":post.Title,
+				"slug":post.Slug,
+				"created_at":post.CreatedAt,
+				"views":post.ViewCount,
+				"tags":post.Tags,
+			})
+
+			}
+		
+			c.JSON(http.StatusOK,posts)
+			
+
+	}
+}
