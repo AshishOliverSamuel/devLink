@@ -1,10 +1,9 @@
 package middleware
 
 import (
-	
+	"fmt"
 	"net/http"
 	"os"
-
 
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"
@@ -17,6 +16,7 @@ func AuthMiddleWare() gin.HandlerFunc {
 
 	
 		tokenString, err := c.Cookie("access_token")
+		fmt.Println(tokenString)
 		if err != nil {
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "Authentication required"})
 			c.Abort()

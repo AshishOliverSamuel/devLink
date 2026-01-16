@@ -135,8 +135,9 @@ func SearchPost(client *mongo.Client) gin.HandlerFunc{
 		filters:=bson.M{
 			"tags":bson.M{
 				"$regex":query,
-				"$otpions":"i",
+				"$options":"i",
 			},
+			"published":true,
 
 		
 		}

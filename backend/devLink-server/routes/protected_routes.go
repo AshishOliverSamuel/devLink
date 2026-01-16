@@ -18,6 +18,6 @@ func ProtectedRoutes(router *gin.Engine,client *mongo.Client){
 	protected.PUT("/updatepost/:id", controllers.UpdatePost(client))
 	protected.DELETE("/deletepost/:id",controllers.DeletePost(client))
 	protected.GET("/posts/archive",controllers.GetArchivePosts(client))
-	protected.POST("/auth/logout", controllers.LogoutUser())
+	protected.GET("/auth/logout", controllers.LogoutUser())
 
 }
