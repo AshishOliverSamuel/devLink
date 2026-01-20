@@ -2,6 +2,7 @@ package controllers
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"os"
 
@@ -16,6 +17,7 @@ import (
 
 
 var upgarder=websocket.Upgrader{
+	
 	CheckOrigin: func(r*http.Request) bool{
 		return true
 	},
@@ -39,6 +41,7 @@ func ChatWebSocket(client *mongo.Client)gin.HandlerFunc{
 		})
 
 		if err!=nil{
+			fmt.Println("Invalid token")
 			c.JSON(http.StatusUnauthorized,gin.H{"error":"Invalid token"});
 			return 
 		}
@@ -54,11 +57,12 @@ func ChatWebSocket(client *mongo.Client)gin.HandlerFunc{
 
 		if err!=nil{
 			c.JSON(http.StatusBadRequest,gin.H{"error":"Invalid room id"});
+			fmt.Println("Invalid room id")
 			return 
 		}
 
 
-		roomCol:=database.OpenCollection("caht_rooms",client)
+		roomCol:=database.OpenCollection("chat_rooms",client)
 
 		count,_:=roomCol.CountDocuments(context.Background(),bson.M{
 			"_id":roomID,
@@ -66,6 +70,7 @@ func ChatWebSocket(client *mongo.Client)gin.HandlerFunc{
 		})
 
 		if count==0{
+			fmt.Println("not avilable")
 			c.JSON(http.StatusForbidden,gin.H{"error":"Not allowed"})
 			return 
 		}

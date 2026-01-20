@@ -8,5 +8,5 @@ import (
 
 
 func WebSocketRoutes(router *gin.Engine,client *mongo.Client){
-	router.GET("/ws/chat/:roomId",controllers.ChatWebSocket(client))
+	router.GET("/ws/chat/:room_id",controllers.ChatWebSocket(client))
 }
