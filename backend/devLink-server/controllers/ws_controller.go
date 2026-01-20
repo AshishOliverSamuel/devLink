@@ -5,8 +5,10 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"time"
 
 	"github.com/ayushmehta03/devLink-backend/database"
+	"github.com/ayushmehta03/devLink-backend/models"
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/gorilla/websocket"
@@ -99,6 +101,23 @@ func ChatWebSocket(client *mongo.Client)gin.HandlerFunc{
 				"sender":userId.Hex(),
 				"content":msg.Content,
 			})
+
+
+			msgCol:=database.OpenCollection("messages",client)
+
+			message:=models.Message{
+				ID:bson.NewObjectID(),
+				RoomID: roomID,
+				SenderID: userId,
+				Content: msg.Content,
+				CreatedAt: time.Now(),
+			}
+
+
+			_,err=msgCol.InsertOne(context.Background(),message)
+			if err!=nil{
+				fmt.Println("WS: Failed tp save message")
+			}
 		}
 
 
