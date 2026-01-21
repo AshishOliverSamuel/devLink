@@ -12,6 +12,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"go.mongodb.org/mongo-driver/v2/bson"
 	"go.mongodb.org/mongo-driver/v2/mongo"
+	"go.mongodb.org/mongo-driver/v2/mongo/options"
 )
 
 
@@ -237,5 +238,72 @@ func RespondChatRequest(client *mongo.Client)gin.HandlerFunc{
 
 
 
+	}
+}
+
+
+func ChatHistory(client *mongo.Client) gin.HandlerFunc{
+	return func(c *gin.Context){
+		userId,exists:=c.Get("user_id")
+		if !exists{
+			c.JSON(http.StatusUnauthorized,gin.H{"error":"Unauthorized"})
+			return 
+		}
+
+		roomIDParam:=c.Param("room_id")
+
+		roomID,err:=bson.ObjectIDFromHex(roomIDParam)
+
+
+		if err!=nil{
+			c.JSON(http.StatusBadRequest,gin.H{"error":"Invalid user id"})
+			return 
+		}
+
+		userObjId,_:=bson.ObjectIDFromHex(userId.(string))
+
+		ctx,cancel:=context.WithTimeout(context.Background(),10*time.Second)
+
+		defer cancel()
+
+
+		roomCol:=database.OpenCollection("chat_rooms",client)
+
+		count,_:=roomCol.CountDocuments(ctx,bson.M{
+			"_id":roomID,
+			"participants":userObjId,
+		})
+
+		if count==0{
+			c.JSON(http.StatusForbidden,gin.H{"error":"Not allowed"})
+			return 
+		}
+
+		msgCol:=database.OpenCollection("messages",client)
+
+		cursor,err:=msgCol.Find(
+			ctx,
+			bson.M{"room_id":roomID},
+			options.Find().SetSort(bson.M{"created_at":1}),
+		)
+
+		if err!=nil{
+			c.JSON(http.StatusInternalServerError,gin.H{"error":"Failed to fetch message"})
+			return 
+		}
+
+		defer cursor.Close(ctx)
+
+
+
+		var messages []models.Message
+
+		cursor.All(ctx,&messages)
+
+		if messages==nil{
+			messages=[]models.Message{}
+		}
+
+		c.JSON(http.StatusOK,messages)
 	}
 }
