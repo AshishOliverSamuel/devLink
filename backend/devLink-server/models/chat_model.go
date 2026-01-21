@@ -29,6 +29,7 @@ type Message struct{
 	RoomID bson.ObjectID `bson:"room_id" json:"room_id"`
 	SenderID bson.ObjectID `bson:"sender_id" json:"sender_id"`
 	Content string `bson:"content" json:"content"`
+	Seen *time.Time `bson:"seen_at,omitempty" json:"seen_at,omitempty"`
 	CreatedAt time.Time `bson:"created_at" json:"created_at"`
 }
 
