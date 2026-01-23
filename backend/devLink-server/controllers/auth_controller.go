@@ -365,8 +365,8 @@ func LogoutUser() gin.HandlerFunc {
 			"",
 			-1,
 			"/",
-			"",
-			false,
+			".onrender.com",
+			true,
 			true,
 		)
 
