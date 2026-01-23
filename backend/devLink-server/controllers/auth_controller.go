@@ -338,7 +338,7 @@ func LoginUser(client *mongo.Client) gin.HandlerFunc{
 	3600*24,
 	"/",
 	"",
-	true,   
+	false,   
 	true,   
 )
 
