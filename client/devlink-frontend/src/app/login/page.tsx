@@ -27,8 +27,37 @@ export default function Page() {
       toast.success("Welcome back!");
       router.push("/dashboard");
     } catch (err: any) {
-      console.log(err);
-      toast.error(err.message || "Login failed");
+      console.log("LOGIN ERROR 👉", err);
+
+      const errorCode =
+        err?.code ||
+        err?.data?.code ||
+        err?.response?.code;
+
+      const errorMessage =
+        err?.error ||
+        err?.message ||
+        err?.data?.error ||
+        "";
+
+      const errorEmail =
+        err?.email ||
+        err?.data?.email ||
+        email; 
+
+      if (
+        errorCode === "ACCOUNT_NOT_VERIFIED" ||
+        errorMessage.toLowerCase().includes("not verified")
+      ) {
+        toast.error("Account not verified. Verify your email.");
+
+        router.push(
+          `/verify-again?email=${encodeURIComponent(errorEmail)}`
+        );
+        return;
+      }
+
+      toast.error(errorMessage || "Login failed");
     } finally {
       setLoading(false);
     }
@@ -38,6 +67,7 @@ export default function Page() {
     <main className="min-h-screen px-4 bg-[var(--color-background-dark)] flex flex-col items-center">
       <div className="w-full max-w-md py-16">
         <div className="bg-white dark:bg-[#121c26] rounded-2xl p-6 sm:p-8 shadow-lg">
+          {/* Logo */}
           <div className="flex justify-center mb-4">
             <h2 className="text-lg sm:text-xl font-bold tracking-tight text-slate-900 dark:text-white">
               Dev<span className="text-primary">Link</span>
@@ -53,6 +83,7 @@ export default function Page() {
             </div>
           </div>
 
+          {/* Header */}
           <div className="text-center mb-6">
             <h1 className="text-2xl sm:text-3xl font-bold text-slate-900 dark:text-white">
               Welcome back
@@ -108,6 +139,7 @@ export default function Page() {
             </button>
           </form>
 
+          {/* Footer */}
           <p className="text-center text-sm text-slate-500 dark:text-slate-400 mt-6">
             Don&apos;t have an account?{" "}
             <Link
