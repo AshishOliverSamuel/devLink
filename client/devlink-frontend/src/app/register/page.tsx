@@ -34,7 +34,6 @@ export default function Page() {
 
       router.push(`/verify-otp?email=${encodeURIComponent(email)}`);
     } catch (err: any) {
-      console.error(err);
       toast.error(err.message || "Registration failed");
     } finally {
       setLoading(false);

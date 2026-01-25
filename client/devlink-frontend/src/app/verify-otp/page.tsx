@@ -18,16 +18,17 @@ export default function VerifyOtpPage() {
   const [loading, setLoading] = useState(false);
   const [seconds, setSeconds] = useState(60);
 
+  const [shake, setShake] = useState(false);
+  const [success, setSuccess] = useState(false);
+
   const inputsRef = useRef<HTMLInputElement[]>([]);
 
-  
   useEffect(() => {
     if (!email) {
       router.replace("/login");
     }
   }, [email, router]);
 
-  
   useEffect(() => {
     if (seconds <= 0) return;
     const t = setInterval(() => {
@@ -36,7 +37,7 @@ export default function VerifyOtpPage() {
     return () => clearInterval(t);
   }, [seconds]);
 
-  
+  /* ---------------- AUTO RESEND ---------------- */
   useEffect(() => {
     if (!email) return;
 
@@ -46,13 +47,13 @@ export default function VerifyOtpPage() {
     }
   }, [email, autoResendParam]);
 
-  
+  /* ---------------- HELPERS ---------------- */
   const maskEmail = (email: string) => {
     const [name, domain] = email.split("@");
     return name.slice(0, 2) + "***@" + domain;
   };
 
-  
+  /* ---------------- INPUT HANDLING ---------------- */
   const handleChange = (value: string, index: number) => {
     if (!/^\d?$/.test(value)) return;
 
@@ -75,7 +76,6 @@ export default function VerifyOtpPage() {
     }
   };
 
-  
   const verifyOtp = async (finalOtp: string) => {
     try {
       setLoading(true);
@@ -85,18 +85,25 @@ export default function VerifyOtpPage() {
         body: JSON.stringify({ email, otp: finalOtp }),
       });
 
+      setSuccess(true);
       toast.success("Account verified!");
-      router.replace("/dashboard");
+
+      setTimeout(() => {
+        router.replace("/dashboard");
+      }, 900);
     } catch (err: any) {
       toast.error(err?.error || "Invalid OTP");
+
+      setShake(true);
       setOtp(["", "", "", "", "", ""]);
       inputsRef.current[0]?.focus();
+
+      setTimeout(() => setShake(false), 500);
     } finally {
       setLoading(false);
     }
   };
 
-  
   const resendOtp = async (silent = false) => {
     try {
       await apiFetch("/auth/resend-otp", {
@@ -104,20 +111,21 @@ export default function VerifyOtpPage() {
         body: JSON.stringify({ email }),
       });
 
-      if (!silent) {
-        toast.success("OTP resent");
-      }
-
+      if (!silent) toast.success("OTP resent");
       setSeconds(60);
     } catch (err: any) {
       toast.error(err?.error || "Failed to resend OTP");
     }
   };
 
-     
   return (
     <main className="min-h-screen bg-[var(--color-background-dark)] flex items-center justify-center px-4">
-      <div className="w-full max-w-md bg-white dark:bg-[#121c26] rounded-2xl p-6 shadow-lg">
+      <div
+        className={`w-full max-w-md bg-white dark:bg-[#121c26] rounded-2xl p-6 shadow-lg transition-all
+          ${shake ? "animate-shake" : ""}
+          ${success ? "ring-2 ring-green-500 scale-[1.02]" : ""}
+        `}
+      >
         <h1 className="text-2xl font-bold text-center text-slate-900 dark:text-white">
           Verify your email
         </h1>
@@ -143,29 +151,62 @@ export default function VerifyOtpPage() {
               onKeyDown={(e) =>
                 e.key === "Backspace" && handleBackspace(i)
               }
-              className="w-12 h-14 text-center text-xl font-bold rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-[#192633] text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary/50"
+              className={`w-12 h-14 text-center text-xl font-bold rounded-lg border-2
+                transition-all duration-200
+                ${
+                  success
+                    ? "border-green-500 text-green-500"
+                    : "border-slate-300 dark:border-slate-700"
+                }
+                bg-white dark:bg-[#192633]
+                text-slate-900 dark:text-white
+                focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/30`}
             />
           ))}
         </div>
 
         {loading && (
-          <p className="text-center text-sm text-slate-500 mt-4">
+          <p className="text-center text-sm text-slate-500 mt-4 animate-pulse">
             Verifying…
           </p>
         )}
 
+        {/* Resend */}
         <div className="text-center mt-6">
           <button
             disabled={seconds > 0}
             onClick={() => resendOtp(false)}
-            className="text-primary font-semibold disabled:text-slate-400"
+            className="text-primary font-semibold disabled:text-slate-400 transition"
           >
-            {seconds > 0
-              ? `Resend in ${seconds}s`
-              : "Resend code"}
+            {seconds > 0 ? `Resend in ${seconds}s` : "Resend code"}
           </button>
         </div>
       </div>
+
+      {/* Animations */}
+      <style jsx>{`
+        @keyframes shake {
+          0% {
+            transform: translateX(0);
+          }
+          25% {
+            transform: translateX(-6px);
+          }
+          50% {
+            transform: translateX(6px);
+          }
+          75% {
+            transform: translateX(-6px);
+          }
+          100% {
+            transform: translateX(0);
+          }
+        }
+
+        .animate-shake {
+          animation: shake 0.45s ease-in-out;
+        }
+      `}</style>
     </main>
   );
 }
