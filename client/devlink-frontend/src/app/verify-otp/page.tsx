@@ -34,6 +34,23 @@ export default function VerifyOtpPage() {
     return () => clearInterval(interval);
   }, [seconds]);
 
+  /* Auto-submit when OTP complete */
+  useEffect(() => {
+    const otpValue = otp.join("");
+    if (otpValue.length === 6 && !loading) {
+      handleVerify();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [otp]);
+
+  /* Mask email (dev***@gmail.com) */
+  const maskEmail = (email: string) => {
+    const [name, domain] = email.split("@");
+    if (!name || !domain) return email;
+    if (name.length <= 2) return `${name[0]}***@${domain}`;
+    return `${name.slice(0, 2)}***@${domain}`;
+  };
+
   const handleChange = (value: string, index: number) => {
     if (!/^\d?$/.test(value)) return;
 
@@ -57,11 +74,7 @@ export default function VerifyOtpPage() {
 
   const handleVerify = async () => {
     const otpValue = otp.join("");
-
-    if (otpValue.length !== 6) {
-      toast.error("Enter complete 6-digit OTP");
-      return;
-    }
+    if (otpValue.length !== 6) return;
 
     try {
       setLoading(true);
@@ -76,13 +89,14 @@ export default function VerifyOtpPage() {
       );
 
       const data = await res.json();
-
       if (!res.ok) throw new Error(data.error);
 
       toast.success("Email verified 🎉");
       router.push("/login");
     } catch (err: any) {
       toast.error(err.message || "Invalid OTP");
+      setOtp(["", "", "", "", "", ""]);
+      inputsRef.current[0]?.focus();
     } finally {
       setLoading(false);
     }
@@ -117,16 +131,16 @@ export default function VerifyOtpPage() {
 
   return (
     <div className="min-h-screen bg-background text-foreground flex flex-col items-center px-4">
-      {/* Header */}
-      <div className="w-full max-w-md pt-8 text-center animate-fade-in">
+      <div className="w-full max-w-md pt-10 text-center animate-fade-in">
         <h1 className="text-3xl font-bold">Verify your email</h1>
         <p className="mt-2 text-slate-400 text-sm">
           Enter the 6-digit code sent to
         </p>
-        <p className="text-primary font-medium break-all">{email}</p>
+        <p className="text-primary font-medium">
+          {email ? maskEmail(email) : ""}
+        </p>
       </div>
 
-      {/* OTP Card */}
       <div className="w-full max-w-md mt-8 bg-white dark:bg-[#121c26] rounded-2xl p-6 shadow-lg animate-slide-up">
         <div className="flex justify-center gap-3">
           {otp.map((digit, index) => (
@@ -145,7 +159,7 @@ export default function VerifyOtpPage() {
           ))}
         </div>
 
-        {/* Verify Button */}
+        {/* Manual verify fallback (accessibility) */}
         <button
           onClick={handleVerify}
           disabled={loading}
@@ -175,7 +189,6 @@ export default function VerifyOtpPage() {
         </div>
       </div>
 
-      {/* Animations */}
       <style jsx>{`
         @keyframes slide-up {
           from {
@@ -198,7 +211,7 @@ export default function VerifyOtpPage() {
         }
 
         .animate-slide-up {
-          animation: slide-up 0.5s ease-out;
+          animation: slide-up 0.45s ease-out;
         }
 
         .animate-fade-in {
