@@ -17,12 +17,43 @@ import (
 	"go.mongodb.org/mongo-driver/v2/mongo/options"
 )
 
+type PostAuthor struct {
+	ID           bson.ObjectID `json:"id"`
+	Username     string             `json:"username"`
+	ProfileImage string             `json:"profile_image"`
+}
+
+type HomePostResponse struct {
+	models.Post
+	Author PostAuthor `json:"author"`
+}
+
+
+type PostResponse struct {
+	models.Post
+	Author PostAuthor `json:"author"`
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 func GetHomeFeed(client *mongo.Client) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
 
 		collection := database.OpenCollection("posts", client)
+		userCollection := database.OpenCollection("users", client) 
 
 		filter := bson.M{
 			"published": true,
@@ -48,11 +79,39 @@ func GetHomeFeed(client *mongo.Client) gin.HandlerFunc {
 			return
 		}
 
+		var response []HomePostResponse
+
+		for _, post := range posts {
+			var user models.User
+
+			err := userCollection.FindOne(
+				ctx,
+				bson.M{"_id": post.AuthorID},
+			).Decode(&user)
+
+			if err != nil {
+				continue 
+			}
+
+			response = append(response, HomePostResponse{
+				Post: post,
+				Author: PostAuthor{
+					ID:           user.Id,
+					Username:     user.UserName,
+					ProfileImage: user.ProfileImage,
+				},
+			})
+		}
+
 		c.JSON(http.StatusOK, gin.H{
-			"posts": posts,
+			"posts": response, 
 		})
 	}
 }
+
+
+
+
 
 
 func CreatePost(client *mongo.Client) gin.HandlerFunc{
@@ -101,60 +160,74 @@ func CreatePost(client *mongo.Client) gin.HandlerFunc{
 }
 
 
-func GetAllPosts(client *mongo.Client) gin.HandlerFunc{
-	return func(c *gin.Context){
+func GetAllPosts(client *mongo.Client) gin.HandlerFunc {
+	return func(c *gin.Context) {
 
-		ctx,cancel:=context.WithTimeout(context.Background(),time.Second)
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+		defer cancel()
 
-		defer cancel();
+		collection := database.OpenCollection("posts", client)
+		userCollection := database.OpenCollection("users", client) // 👈 ADDED
 
-		collection:=database.OpenCollection("posts",client)
-
-
-		filter:=bson.M{
-			"published":true,
+		filter := bson.M{
+			"published": true,
 		}
 
-		opts:=options.Find().SetSort(bson.M{"created_at":-1})
+		opts := options.Find().SetSort(bson.M{"created_at": -1})
 
-
-		cursor,err:=collection.Find(ctx,filter,opts)
-
-		if err!=nil{
-			c.JSON(http.StatusInternalServerError,gin.H{"error":"Failed to fetch posts"})
-			return 
+		cursor, err := collection.Find(ctx, filter, opts)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch posts"})
+			return
 		}
 		defer cursor.Close(ctx)
 
-
 		var posts []models.Post
-
-		if err:=cursor.All(ctx,&posts);err!=nil{
-			c.JSON(http.StatusInternalServerError,gin.H{"error":"Failed to parse posts"})
-			return 
+		if err := cursor.All(ctx, &posts); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to parse posts"})
+			return
 		}
 
-		c.JSON(http.StatusOK,posts)
+		var response []PostResponse
 
+		for _, post := range posts {
+			var user models.User
+
+			err := userCollection.FindOne(
+				ctx,
+				bson.M{"_id": post.AuthorID},
+			).Decode(&user)
+
+			if err != nil {
+				continue
+			}
+
+			response = append(response, PostResponse{
+				Post: post,
+				Author: PostAuthor{
+					ID:           user.Id,
+					Username:     user.UserName,
+					ProfileImage: user.ProfileImage,
+				},
+			})
+		}
+
+		c.JSON(http.StatusOK, response) 
 	}
 }
 
 
-func GetPostBySlug(client *mongo.Client) gin.HandlerFunc{
-	return func (c*gin.Context){
-		slug:=c.Param("slug")
+func GetPostBySlug(client *mongo.Client) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		slug := c.Param("slug")
 
-
-
-		ctx,cancel:=context.WithTimeout(context.Background(),10*time.Second)
-
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
 
-
-		collection:=database.OpenCollection("posts",client)
+		collection := database.OpenCollection("posts", client)
+		userCollection := database.OpenCollection("users", client) // 👈 ADDED
 
 		var post models.Post
-
 
 		err := collection.FindOneAndUpdate(
 			ctx,
@@ -162,15 +235,33 @@ func GetPostBySlug(client *mongo.Client) gin.HandlerFunc{
 			bson.M{"$inc": bson.M{"view_count": 1}},
 		).Decode(&post)
 
-
-		if err!=nil{
-			c.JSON(http.StatusNotFound,gin.H{"error":"Post not found"})
-			return 
+		if err != nil {
+			c.JSON(http.StatusNotFound, gin.H{"error": "Post not found"})
+			return
 		}
 
-		c.JSON(http.StatusOK,post)
+		var user models.User
+		err = userCollection.FindOne(
+			ctx,
+			bson.M{"_id": post.AuthorID},
+		).Decode(&user)
 
-}
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Author not found"})
+			return
+		}
+
+		response := PostResponse{
+			Post: post,
+			Author: PostAuthor{
+				ID:           user.Id,
+				Username:     user.UserName,
+				ProfileImage: user.ProfileImage,
+			},
+		}
+
+		c.JSON(http.StatusOK, response) 
+	}
 }
 
 
