@@ -17,6 +17,44 @@ import (
 	"go.mongodb.org/mongo-driver/v2/mongo/options"
 )
 
+func GetHomeFeed(client *mongo.Client) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+
+		collection := database.OpenCollection("posts", client)
+
+		filter := bson.M{
+			"published": true,
+		}
+
+		opts := options.Find().
+			SetSort(bson.D{{"created_at", -1}}). 
+			SetLimit(3)                          
+
+		cursor, err := collection.Find(ctx, filter, opts)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"error": "Failed to fetch home feed",
+			})
+			return
+		}
+
+		var posts []models.Post
+		if err := cursor.All(ctx, &posts); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"error": "Failed to parse posts",
+			})
+			return
+		}
+
+		c.JSON(http.StatusOK, gin.H{
+			"posts": posts,
+		})
+	}
+}
+
+
 func CreatePost(client *mongo.Client) gin.HandlerFunc{
 	return func(c *gin.Context ){
 
