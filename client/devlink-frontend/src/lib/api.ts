@@ -1,4 +1,4 @@
-const API_BASE=process.env.NEXT_PUBLIC_API_URL;
+// src/lib/api.ts
 
 export async function apiFetch(
   path: string,
@@ -16,11 +16,20 @@ export async function apiFetch(
     }
   );
 
-  const text = await res.text();
-  const data = text ? JSON.parse(text) : null;
+  let data: any = null;
+
+  try {
+    data = await res.json();
+  } catch {
+  }
 
   if (!res.ok) {
-    throw data || { error: "Request failed" };
+    const message =
+      data?.message ||
+      data?.error ||
+      `Request failed (${res.status})`;
+
+    throw new Error(message);
   }
 
   return data;

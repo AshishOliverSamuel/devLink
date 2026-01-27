@@ -82,6 +82,61 @@ func GetHomeFeed(client *mongo.Client) gin.HandlerFunc {
 	}
 }
 
+func GetTrendingPosts(client *mongo.Client) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+
+		postCol := database.OpenCollection("posts", client)
+		userCol := database.OpenCollection("users", client)
+
+		cursor, err := postCol.Find(
+			ctx,
+			bson.M{"published": true},
+			options.Find().
+				SetSort(bson.D{{Key: "view_count", Value: -1}}).
+				SetLimit(10),
+		)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"error": "Failed to fetch trending posts",
+			})
+			return
+		}
+
+		var posts []models.Post
+		if err := cursor.All(ctx, &posts); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"error": "Failed to parse trending posts",
+			})
+			return
+		}
+
+		var response []HomePostResponse
+
+		for _, post := range posts {
+			var user models.User
+			if err := userCol.FindOne(ctx, bson.M{"_id": post.AuthorID}).Decode(&user); err != nil {
+				continue
+			}
+
+			response = append(response, HomePostResponse{
+				Post: post,
+				Author: PostAuthor{
+					ID:           user.Id,
+					Username:     user.UserName,
+					ProfileImage: user.ProfileImage,
+				},
+			})
+		}
+
+		c.JSON(http.StatusOK, gin.H{
+			"posts": response,
+		})
+	}
+}
+
+
 
 func CreatePost(client *mongo.Client) gin.HandlerFunc {
 	return func(c *gin.Context) {
