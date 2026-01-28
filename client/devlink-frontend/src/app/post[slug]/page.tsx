@@ -7,13 +7,6 @@ import toast from "react-hot-toast";
 import { apiFetch } from "@/lib/api";
 import { FiArrowLeft, FiShare2 } from "react-icons/fi";
 
-/* ================= TYPES ================= */
-
-type Author = {
-  id?: string;
-  username?: string;
-  profile_image?: string;
-};
 
 type Post = {
   id: string;
@@ -24,10 +17,8 @@ type Post = {
   tags?: string[];
   created_at: string;
   view_count: number;
-  author?: Author;
 };
 
-/* ================= HELPERS ================= */
 
 const formatDate = (date: string) =>
   new Date(date).toLocaleDateString("en-US", {
@@ -39,7 +30,6 @@ const formatDate = (date: string) =>
 const getReadTime = (content: string) =>
   `${Math.max(1, Math.ceil(content.split(" ").length / 200))} min read`;
 
-/* ================= PAGE ================= */
 
 export default function PostPage() {
   const { slug } = useParams<{ slug: string }>();
@@ -53,19 +43,10 @@ export default function PostPage() {
 
     const load = async () => {
       try {
-        const res = await apiFetch(`/posts/${slug}`);
-        const data = res?.data ?? res;
-
-        // 🔥 FORCE AUTHOR DEFAULTS (NO CONDITIONAL RENDERING)
-        setPost({
-          ...data,
-          author: data.author ?? {
-            username: "author",
-            profile_image: "",
-          },
-        });
+        const data: Post = await apiFetch(`/posts/${slug}`);
+        setPost(data);
       } catch (err) {
-        console.error(err);
+        console.error("FETCH ERROR:", err);
         setPost(null);
       } finally {
         setLoading(false);
@@ -101,191 +82,66 @@ export default function PostPage() {
   };
 
   return (
-    <main
-      className="min-h-screen bg-[#020617]"
-      style={{
-        color: "#ffffff",
-        fontSize: "16px",
-        lineHeight: "1.6",
-      }}
-    >
+    <main className="min-h-screen bg-[#020617] text-white">
       {/* HEADER */}
-      <header
-        className="sticky top-0 z-50 border-b"
-        style={{
-          background: "#020617",
-          borderColor: "rgba(255,255,255,0.05)",
-        }}
-      >
-        <div className="max-w-4xl mx-auto px-4 py-4 flex justify-between">
+      <header className="sticky top-0 z-50 border-b border-white/5 bg-[#020617]">
+        <div className="max-w-5xl mx-auto px-4 py-4 flex justify-between">
           <button
             onClick={() => router.back()}
-            style={{ color: "#60a5fa", fontSize: "14px" }}
+            className="text-sm text-blue-400 flex items-center gap-1"
           >
             <FiArrowLeft /> Back
           </button>
 
           <button
             onClick={handleShare}
-            style={{ color: "#60a5fa", fontSize: "14px" }}
+            className="text-sm text-blue-400 flex items-center gap-1"
           >
             <FiShare2 /> Share
           </button>
         </div>
       </header>
 
-      {/* CONTENT */}
-      <div className="max-w-4xl mx-auto px-4 py-10">
-        <article
-          style={{
-            fontSize: "16px",
-            lineHeight: "1.6",
-            color: "#ffffff",
-          }}
-        >
-          {/* IMAGE */}
-          {post.image_url && (
-            <div className="mb-10 rounded-xl overflow-hidden">
-              <div className="relative w-full h-[220px] sm:h-[400px]">
-                <Image
-                  src={post.image_url}
-                  alt={post.title}
-                  fill
-                  className="object-cover"
-                  priority
-                />
-              </div>
-            </div>
-          )}
-
-          {/* TITLE */}
-          <h1
-            style={{
-              fontSize: "32px",
-              fontWeight: 700,
-              marginBottom: "12px",
-            }}
-          >
-            {post.title}
-          </h1>
-
-          {/* META */}
-          <div
-            style={{
-              fontSize: "14px",
-              color: "#94a3b8",
-              marginBottom: "20px",
-            }}
-          >
-            {formatDate(post.created_at)} • {getReadTime(post.content)} •{" "}
-            {post.view_count} views
-          </div>
-
-          {/* 🔥 AUTHOR (FORCED VISIBLE – NO TAILWIND) */}
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: "12px",
-              marginBottom: "32px",
-              padding: "12px",
-              background: "rgba(255,255,255,0.05)",
-              borderRadius: "8px",
-            }}
-          >
-            <img
-              src={
-                post.author?.profile_image ||
-                `https://api.dicebear.com/7.x/initials/svg?seed=${post.author?.username}`
-              }
-              alt="author"
-              style={{
-                width: "40px",
-                height: "40px",
-                borderRadius: "50%",
-              }}
-            />
-
-            <div>
-              <div
-                style={{
-                  fontSize: "16px",
-                  fontWeight: 600,
-                  color: "#ffffff",
-                }}
-              >
-                @{post.author?.username}
-              </div>
-              <div style={{ fontSize: "12px", color: "#94a3b8" }}>
-                Author
-              </div>
+      <div className="max-w-5xl mx-auto px-4 py-10">
+        {post.image_url && (
+          <div className="mb-10 rounded-2xl overflow-hidden bg-white/5 shadow-xl">
+            <div className="relative h-[240px] sm:h-[420px]">
+              <Image
+                src={post.image_url}
+                alt={post.title}
+                fill
+                priority
+                className="object-cover"
+              />
             </div>
           </div>
+        )}
 
-          {/* CONTENT */}
-          <div
-            style={{
-              fontSize: "18px",
-              color: "#e5e7eb",
-              whiteSpace: "pre-line",
-            }}
-          >
-            {post.content}
-          </div>
+        <h1 className="text-3xl sm:text-4xl font-bold mb-3">
+          {post.title}
+        </h1>
 
-          {/* TAGS */}
-          {post.tags && post.tags.length > 0 && (
-            <div className="mt-10 flex flex-wrap gap-2">
-              {post.tags.map((tag) => (
-                <span
-                  key={tag}
-                  style={{
-                    fontSize: "12px",
-                    padding: "6px 10px",
-                    borderRadius: "6px",
-                    background: "rgba(59,130,246,0.15)",
-                    color: "#60a5fa",
-                  }}
-                >
-                  #{tag}
-                </span>
-              ))}
-            </div>
-          )}
+        <div className="text-sm text-gray-400 mb-8">
+          {formatDate(post.created_at)} • {getReadTime(post.content)} •{" "}
+          {post.view_count} views
+        </div>
 
-          {/* AUTHOR FOOTER */}
-          <div
-            style={{
-              marginTop: "48px",
-              paddingTop: "24px",
-              borderTop: "1px solid rgba(255,255,255,0.1)",
-              display: "flex",
-              alignItems: "center",
-              gap: "16px",
-            }}
-          >
-            <img
-              src={
-                post.author?.profile_image ||
-                `https://api.dicebear.com/7.x/initials/svg?seed=${post.author?.username}`
-              }
-              alt="author"
-              style={{
-                width: "56px",
-                height: "56px",
-                borderRadius: "50%",
-              }}
-            />
-            <div>
-              <div style={{ fontSize: "12px", color: "#94a3b8" }}>
-                Written by
-              </div>
-              <div style={{ fontSize: "18px", fontWeight: 700 }}>
-                @{post.author?.username}
-              </div>
-            </div>
-          </div>
+        <article className="text-lg leading-relaxed text-gray-200 whitespace-pre-line">
+          {post.content}
         </article>
+
+        {post.tags && post.tags.length > 0 && (
+          <div className="mt-10 flex flex-wrap gap-2">
+            {post.tags.map((tag) => (
+              <span
+                key={tag}
+                className="text-xs px-3 py-1 rounded-md bg-blue-500/15 text-blue-400"
+              >
+                #{tag}
+              </span>
+            ))}
+          </div>
+        )}
       </div>
     </main>
   );
