@@ -17,7 +17,7 @@ func GetUserProfile(client *mongo.Client )gin.HandlerFunc{
 	return func(c* gin.Context){
 
 
-		userId:=c.Param("id")
+		userId:=c.Param("userId")
 
 		userObjId,err:=bson.ObjectIDFromHex(userId)
 
@@ -179,7 +179,7 @@ func SearchPost(client *mongo.Client) gin.HandlerFunc{
 
 func GetUserProfileStats(client *mongo.Client) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		userId := c.Param("id")
+		userId := c.Param("userId")
 
 		userObjId, err := bson.ObjectIDFromHex(userId)
 		if err != nil {
