@@ -9,12 +9,24 @@ import {
   FiTrash,
   FiArchive,
   FiUpload,
-  FiMessageCircle,
-  FiEye,
   FiEdit,
+  FiMessageCircle,
+  FiBarChart2,
+  FiEye,
 } from "react-icons/fi";
 
-/* ================= TYPES ================= */
+import {
+  Chart as ChartJS,
+  BarElement,
+  CategoryScale,
+  LinearScale,
+  Tooltip,
+  Legend,
+} from "chart.js";
+import { Bar } from "react-chartjs-2";
+
+ChartJS.register(BarElement, CategoryScale, LinearScale, Tooltip, Legend);
+
 
 type Post = {
   id: string;
@@ -31,7 +43,6 @@ type User = {
   profile_image?: string;
 };
 
-/* ================= HELPERS ================= */
 
 const normalizePosts = (data: any[]): Post[] =>
   data.map((p) => ({
@@ -43,7 +54,6 @@ const normalizePosts = (data: any[]): Post[] =>
     tags: p.tags || [],
   }));
 
-/* ================= PAGE ================= */
 
 export default function MyProfilePage() {
   const router = useRouter();
@@ -52,11 +62,12 @@ export default function MyProfilePage() {
   const [posts, setPosts] = useState<Post[]>([]);
   const [archivePosts, setArchivePosts] = useState<Post[]>([]);
   const [tab, setTab] = useState<"posts" | "archive">("posts");
+
   const [menuOpen, setMenuOpen] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [draft, setDraft] = useState<Partial<Post>>({});
+  const [showAnalytics, setShowAnalytics] = useState(false);
 
-  /* ================= FETCH ================= */
 
   useEffect(() => {
     apiFetch("/auth/me")
@@ -114,13 +125,23 @@ export default function MyProfilePage() {
     location.reload();
   };
 
-  /* ================= UI ================= */
+
+  const chartData = {
+    labels: posts.map((p) => p.title || "Untitled"),
+    datasets: [
+      {
+        label: "Views",
+        data: posts.map((p) => p.view_count),
+        backgroundColor: "#137fec",
+      },
+    ],
+  };
+
 
   return (
-    <main className="min-h-screen bg-[#101922] text-white px-4 pb-28">
+    <main className="min-h-screen bg-[#101922] text-white px-4 pb-32">
 
-      {/* PROFILE */}
-      <div className="flex flex-col items-center mt-6 animate-fade-in">
+      <div className="flex flex-col items-center mt-6">
         <img
           src={
             user.profile_image ||
@@ -136,177 +157,178 @@ export default function MyProfilePage() {
           <Stat label="Dev Points" value={devPoints} highlight />
         </div>
 
-        <button
-          onClick={() => router.push("/messages")}
-          className="mt-4 flex items-center gap-2 text-primary hover:scale-105 transition"
-        >
-          <FiMessageCircle />
-          Open Messages
-        </button>
+        <div className="flex gap-4 mt-4">
+          <ActionButton
+            icon={<FiMessageCircle />}
+            label="Open Messages"
+            onClick={() => router.push("/messages")}
+          />
+          <ActionButton
+            icon={<FiBarChart2 />}
+            label="Analytics"
+            onClick={() => setShowAnalytics(true)}
+          />
+        </div>
       </div>
 
-      {/* TABS + ANALYTICS */}
-      <div className="flex flex-col lg:flex-row gap-6 mt-10">
+      {/* TABS */}
+      <div className="flex justify-center gap-8 mt-10 border-b border-slate-800">
+        {["posts", "archive"].map((t) => (
+          <button
+            key={t}
+            onClick={() => setTab(t as any)}
+            className={`pb-2 font-semibold capitalize ${
+              tab === t
+                ? "text-primary border-b-2 border-primary"
+                : "text-slate-400"
+            }`}
+          >
+            {t}
+          </button>
+        ))}
+      </div>
 
-        {/* LEFT */}
-        <div className="flex-1">
-          <div className="flex gap-8 border-b border-slate-800">
-            {["posts", "archive"].map((t) => (
-              <button
-                key={t}
-                onClick={() => setTab(t as any)}
-                className={`pb-2 font-semibold capitalize ${
-                  tab === t
-                    ? "text-primary border-b-2 border-primary"
-                    : "text-slate-400"
-                }`}
-              >
-                {t}
-              </button>
-            ))}
-          </div>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mt-6">
+        {list.map((post) => {
+          const isEditing = editingId === post.id;
 
-          {/* POSTS GRID */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mt-6">
-            {list.map((post) => {
-              const isEditing = editingId === post.id;
+          return (
+            <div
+              key={post.id}
+              className="bg-[#192633] rounded-xl border border-slate-800 relative"
+            >
+              {post.image_url && (
+                <div className="relative aspect-video rounded-t-xl overflow-hidden">
+                  <Image
+                    src={post.image_url}
+                    alt={post.title}
+                    fill
+                    className="object-cover"
+                  />
+                </div>
+              )}
 
-              return (
-                <div
-                  key={post.id}
-                  className="bg-[#192633] rounded-xl border border-slate-800 relative animate-scale-in"
-                >
-                  {post.image_url && (
-                    <div className="relative aspect-video rounded-t-xl overflow-hidden">
-                      <Image
-                        src={post.image_url}
-                        alt={post.title}
-                        fill
-                        className="object-cover"
-                      />
-                    </div>
-                  )}
+              <div className="p-4">
+                <div className="flex justify-between">
+                  <h3 className="font-bold text-lg">
+                    {post.title || "Untitled"}
+                  </h3>
 
-                  <div className="p-4">
-                    <div className="flex justify-between items-start">
-                      <h3 className="font-bold text-lg">
-                        {post.title || "Untitled"}
-                      </h3>
+                  <button
+                    onClick={() =>
+                      setMenuOpen(menuOpen === post.id ? null : post.id)
+                    }
+                  >
+                    <FiMoreVertical />
+                  </button>
+                </div>
 
+                {!isEditing && (
+                  <p className="text-slate-400 text-sm mt-2 line-clamp-2">
+                    {post.content}
+                  </p>
+                )}
+
+                {isEditing && (
+                  <div className="mt-3 space-y-3">
+                    <input
+                      className="w-full bg-[#233648] p-2 rounded"
+                      defaultValue={post.title}
+                      onChange={(e) =>
+                        setDraft((d) => ({ ...d, title: e.target.value }))
+                      }
+                    />
+                    <textarea
+                      className="w-full bg-[#233648] p-2 rounded h-24"
+                      defaultValue={post.content}
+                      onChange={(e) =>
+                        setDraft((d) => ({ ...d, content: e.target.value }))
+                      }
+                    />
+                    <div className="flex justify-end gap-3">
                       <button
-                        onClick={() =>
-                          setMenuOpen(menuOpen === post.id ? null : post.id)
-                        }
+                        onClick={() => setEditingId(null)}
+                        className="text-slate-400"
                       >
-                        <FiMoreVertical />
+                        Cancel
+                      </button>
+                      <button
+                        onClick={savePost}
+                        className="bg-primary px-4 py-2 rounded"
+                      >
+                        Update
                       </button>
                     </div>
-
-                    {!isEditing && (
-                      <p className="text-slate-400 text-sm mt-2 line-clamp-2">
-                        {post.content}
-                      </p>
-                    )}
-
-                    {/* INLINE EDITOR */}
-                    {isEditing && (
-                      <div className="mt-3 space-y-3 animate-scale-in">
-                        <input
-                          className="w-full bg-[#233648] p-2 rounded"
-                          defaultValue={post.title}
-                          onChange={(e) =>
-                            setDraft((d) => ({
-                              ...d,
-                              title: e.target.value,
-                            }))
-                          }
-                        />
-                        <textarea
-                          className="w-full bg-[#233648] p-2 rounded h-24"
-                          defaultValue={post.content}
-                          onChange={(e) =>
-                            setDraft((d) => ({
-                              ...d,
-                              content: e.target.value,
-                            }))
-                          }
-                        />
-                        <div className="flex justify-end gap-3">
-                          <button
-                            onClick={() => setEditingId(null)}
-                            className="text-slate-400"
-                          >
-                            Cancel
-                          </button>
-                          <button
-                            onClick={savePost}
-                            className="bg-primary px-4 py-2 rounded"
-                          >
-                            Update
-                          </button>
-                        </div>
-                      </div>
-                    )}
-
-                    <div className="flex items-center gap-1 text-xs text-slate-400 mt-3">
-                      <FiEye /> {post.view_count}
-                    </div>
                   </div>
+                )}
 
-                  {/* MENU */}
-                  {menuOpen === post.id && (
-                    <div className="absolute right-3 top-14 bg-[#233648] rounded-lg w-44 z-20 animate-scale-in">
-                      {tab === "posts" ? (
-                        <>
-                          <MenuItem
-                            icon={<FiEdit />}
-                            label="Edit"
-                            onClick={() => {
-                              setEditingId(post.id);
-                              setMenuOpen(null);
-                            }}
-                          />
-                          <MenuItem
-                            icon={<FiArchive />}
-                            label="Archive"
-                            onClick={() => togglePublish(post.id, false)}
-                          />
-                        </>
-                      ) : (
-                        <MenuItem
-                          icon={<FiUpload />}
-                          label="Publish"
-                          onClick={() => togglePublish(post.id, true)}
-                        />
-                      )}
-
-                      <MenuItem
-                        icon={<FiTrash />}
-                        label="Delete"
-                        danger
-                        onClick={() => deletePost(post.id)}
-                      />
-                    </div>
-                  )}
+                <div className="flex items-center gap-1 text-xs text-slate-400 mt-3">
+                  <FiEye /> {post.view_count}
                 </div>
-              );
-            })}
+              </div>
+
+              {/* MENU */}
+              {menuOpen === post.id && (
+                <div className="absolute right-3 top-14 bg-[#233648] rounded-lg w-44 z-20">
+                  {tab === "posts" ? (
+                    <>
+                      <MenuItem
+                        icon={<FiEdit />}
+                        label="Edit"
+                        onClick={() => {
+                          setEditingId(post.id);
+                          setMenuOpen(null);
+                        }}
+                      />
+                      <MenuItem
+                        icon={<FiArchive />}
+                        label="Archive"
+                        onClick={() => togglePublish(post.id, false)}
+                      />
+                    </>
+                  ) : (
+                    <MenuItem
+                      icon={<FiUpload />}
+                      label="Publish"
+                      onClick={() => togglePublish(post.id, true)}
+                    />
+                  )}
+
+                  <MenuItem
+                    icon={<FiTrash />}
+                    label="Delete"
+                    danger
+                    onClick={() => deletePost(post.id)}
+                  />
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      {showAnalytics && (
+        <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center">
+          <div className="bg-[#192633] rounded-xl p-6 w-full max-w-2xl">
+            <h3 className="text-xl font-bold mb-4">Profile Analytics</h3>
+
+            <Bar data={chartData} />
+
+            <div className="flex justify-end mt-4">
+              <button
+                onClick={() => setShowAnalytics(false)}
+                className="text-primary"
+              >
+                Close
+              </button>
+            </div>
           </div>
         </div>
-
-        {/* ANALYTICS */}
-        <div className="w-full lg:w-80 bg-[#192633] rounded-xl border border-slate-800 p-4 h-fit animate-fade-in">
-          <h4 className="font-bold mb-3">Profile Analytics</h4>
-          <AnalyticsBar label="Views" value={totalViews} />
-          <AnalyticsBar label="Posts" value={posts.length} />
-          <AnalyticsBar label="Dev Points" value={devPoints} highlight />
-        </div>
-      </div>
+      )}
     </main>
   );
 }
 
-/* ================= COMPONENTS ================= */
 
 function Stat({ label, value, highlight }: any) {
   return (
@@ -323,6 +345,18 @@ function Stat({ label, value, highlight }: any) {
   );
 }
 
+function ActionButton({ icon, label, onClick }: any) {
+  return (
+    <button
+      onClick={onClick}
+      className="flex items-center gap-2 text-primary hover:scale-105 transition"
+    >
+      {icon}
+      {label}
+    </button>
+  );
+}
+
 function MenuItem({ icon, label, danger, onClick }: any) {
   return (
     <button
@@ -334,24 +368,5 @@ function MenuItem({ icon, label, danger, onClick }: any) {
       {icon}
       {label}
     </button>
-  );
-}
-
-function AnalyticsBar({ label, value, highlight }: any) {
-  return (
-    <div className="mb-3">
-      <div className="flex justify-between text-xs mb-1">
-        <span className="text-slate-400">{label}</span>
-        <span className={highlight ? "text-primary" : ""}>{value}</span>
-      </div>
-      <div className="h-2 rounded bg-slate-700">
-        <div
-          className={`h-2 rounded ${
-            highlight ? "bg-primary" : "bg-slate-400"
-          }`}
-          style={{ width: `${Math.min(100, value)}%` }}
-        />
-      </div>
-    </div>
   );
 }
