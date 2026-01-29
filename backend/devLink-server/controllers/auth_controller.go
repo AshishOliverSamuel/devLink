@@ -401,7 +401,6 @@ func GetMe(client *mongo.Client) gin.HandlerFunc {
 			return
 		}
 
-		// 2️⃣ Verify token
 		claims, err := utils.VerifyToken(tokenStr)
 		if err != nil {
 			c.JSON(http.StatusUnauthorized, gin.H{
@@ -410,7 +409,6 @@ func GetMe(client *mongo.Client) gin.HandlerFunc {
 			return
 		}
 
-		// 3️⃣ Convert user ID
 		userObjId, err := bson.ObjectIDFromHex(claims.UserID)
 		if err != nil {
 			c.JSON(http.StatusUnauthorized, gin.H{

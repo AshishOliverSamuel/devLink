@@ -11,6 +11,7 @@ import (
 
 	"github.com/ayushmehta03/devLink-backend/database"
 	"github.com/ayushmehta03/devLink-backend/models"
+	"github.com/ayushmehta03/devLink-backend/utils"
 	"github.com/gin-gonic/gin"
 	"go.mongodb.org/mongo-driver/v2/bson"
 	"go.mongodb.org/mongo-driver/v2/mongo"
@@ -386,4 +387,59 @@ func GenerateUniqueSlug(title string) string {
 	b := make([]byte, 2)
 	rand.Read(b)
 	return fmt.Sprintf("%s-%x", base, b)
+}
+
+func GetMyPosts(client *mongo.Client) gin.HandlerFunc {
+	return func(c *gin.Context) {
+
+		tokenStr, err := c.Cookie("access_token")
+		if err != nil {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "not authenticated"})
+			return
+		}
+
+		claims, err := utils.VerifyToken(tokenStr)
+		if err != nil {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid token"})
+			return
+		}
+
+		userObjId, err := bson.ObjectIDFromHex(claims.UserID)
+		if err != nil {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid user id"})
+			return
+		}
+
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+
+		postCollection := database.OpenCollection("posts", client)
+
+		filter := bson.M{
+			"author_id": userObjId,
+			"published": true,
+		}
+
+		opts := options.Find().SetSort(bson.M{
+			"created_at": -1,
+		})
+
+		cursor, err := postCollection.Find(ctx, filter, opts)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to fetch posts"})
+			return
+		}
+
+		defer cursor.Close(ctx)
+
+		posts := []models.Post{}
+		if err := cursor.All(ctx, &posts); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to parse posts"})
+			return
+		}
+
+		c.JSON(http.StatusOK, gin.H{
+			"posts": posts,
+		})
+	}
 }

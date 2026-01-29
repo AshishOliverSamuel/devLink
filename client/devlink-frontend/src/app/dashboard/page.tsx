@@ -227,7 +227,8 @@ export default function DashboardPage() {
           </button>
 
           <Nav icon={<FiCompass />} label="Discover" />
-          <Nav icon={<FiUser />} label="Profile" />
+          <Nav  icon={<FiUser />} label="Profile"   onClick={() => router.push("/me")}
+ />
         </div>
       </div>
     </main>
@@ -239,19 +240,22 @@ function Nav({
   icon,
   label,
   active,
+  onClick,
 }: {
   icon: React.ReactNode;
   label: string;
   active?: boolean;
+  onClick?: () => void;
 }) {
   return (
-    <div
+    <button
+      onClick={onClick}
       className={`flex flex-col items-center gap-1 font-bold
         text-[10px] lg:text-[12px] hover:text-blue-500
         ${active ? "text-primary" : "text-slate-400"}`}
     >
       <div className="text-base lg:text-lg">{icon}</div>
       {label}
-    </div>
+    </button>
   );
 }

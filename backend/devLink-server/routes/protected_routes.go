@@ -19,8 +19,8 @@ func ProtectedRoutes(router *gin.Engine,client *mongo.Client){
  	 protected.GET("/search/users",controllers.SearchUsers(client))
 	 protected.GET("/posts/tags",controllers.SearchPost(client))
 	 protected.GET("/posts/trending", controllers.GetTrendingPosts(client))
-	
-protected.GET("/users/:userId/stats", controllers.GetUserProfileStats(client))
+	protected.GET("/posts/me",controllers.GetMyPosts(client))
+   protected.GET("/users/:userId/stats", controllers.GetUserProfileStats(client))
 	protected.POST("/createpost",controllers.CreatePost(client))
 	protected.PUT("/updatepost/:id", controllers.UpdatePost(client))
 	protected.DELETE("/deletepost/:id",controllers.DeletePost(client))
@@ -30,4 +30,5 @@ protected.GET("/users/:userId/stats", controllers.GetUserProfileStats(client))
 	protected.POST("/chat/request/:id/respond",controllers.RespondChatRequest(client))
 	protected.GET("/chat/rooms/:room_id/messages",controllers.ChatHistory(client))
 	protected.POST("/chat/rooms/:room_id/seen",controllers.MarkSeenMsg(client))
+
 }

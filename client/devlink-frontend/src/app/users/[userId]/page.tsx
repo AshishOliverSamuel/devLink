@@ -38,7 +38,6 @@ const formatDate = (d: string) =>
 const readTime = (t: string) =>
   `${Math.max(1, Math.ceil(t.split(" ").length / 200))} min read`;
 
-/* ================= PAGE ================= */
 
 export default function UserProfilePage() {
   const params = useParams();
@@ -116,13 +115,11 @@ export default function UserProfilePage() {
           )}
         </div>
 
-        {/* STATS */}
         <div className="grid grid-cols-2 gap-4 mb-8">
           <Stat label="Posts" value={stats.total_posts} />
           <Stat label="Views" value={stats.total_views} />
         </div>
 
-        {/* POSTS */}
         <h2 className="text-sm font-bold text-white mb-4">Posts</h2>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
