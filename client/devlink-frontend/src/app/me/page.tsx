@@ -3,39 +3,18 @@
 import { useEffect, useState } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
+import { motion, AnimatePresence } from "framer-motion";
 import { apiFetch } from "@/lib/api";
 import {
-  FiMoreVertical,
-  FiTrash,
+  FiEdit2,
+  FiTrash2,
   FiArchive,
-  FiUpload,
-  FiEdit,
-  FiMessageCircle,
-  FiBarChart2,
+  FiMoreVertical,
   FiEye,
+  FiMessageCircle,
 } from "react-icons/fi";
 
-import {
-  Chart as ChartJS,
-  BarElement,
-  CategoryScale,
-  LinearScale,
-  Tooltip,
-  Legend,
-} from "chart.js";
-import { Bar } from "react-chartjs-2";
-
-ChartJS.register(BarElement, CategoryScale, LinearScale, Tooltip, Legend);
-
-
-type Post = {
-  id: string;
-  title: string;
-  content: string;
-  image_url?: string;
-  view_count: number;
-  tags: string[];
-};
+/* ================= TYPES ================= */
 
 type User = {
   id: string;
@@ -43,327 +22,280 @@ type User = {
   profile_image?: string;
 };
 
+type Post = {
+  id: string;
+  title: string;
+  content: string;
+  image_url?: string;
+  slug: string;
+  view_count: number;
+  published: boolean;
+};
 
-const normalizePosts = (data: any[]): Post[] =>
-  data.map((p) => ({
-    id: p.id || p._id,
-    title: p.title || "",
-    content: p.content || "",
-    image_url: p.image_url,
-    view_count: p.view_count || 0,
-    tags: p.tags || [],
-  }));
-
+/* ================= PAGE ================= */
 
 export default function MyProfilePage() {
   const router = useRouter();
 
   const [user, setUser] = useState<User | null>(null);
   const [posts, setPosts] = useState<Post[]>([]);
-  const [archivePosts, setArchivePosts] = useState<Post[]>([]);
+  const [archive, setArchive] = useState<Post[]>([]);
   const [tab, setTab] = useState<"posts" | "archive">("posts");
+  const [loading, setLoading] = useState(true);
 
-  const [menuOpen, setMenuOpen] = useState<string | null>(null);
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [draft, setDraft] = useState<Partial<Post>>({});
-  const [showAnalytics, setShowAnalytics] = useState(false);
-
+  /* ================= FETCH ================= */
 
   useEffect(() => {
-    apiFetch("/auth/me")
-      .then(setUser)
-      .catch(() => router.replace("/login"));
+    Promise.all([
+      apiFetch("/auth/me"),
+      apiFetch("/posts/me"),
+      apiFetch("/posts/archive"),
+    ])
+      .then(([me, postsRes, archiveRes]) => {
+        setUser(me);
 
-    apiFetch("/posts/me").then((res) =>
-      setPosts(normalizePosts(Array.isArray(res) ? res : res.posts || []))
+        setPosts(
+          Array.isArray(postsRes)
+            ? postsRes
+            : postsRes?.posts || []
+        );
+
+        setArchive(
+          Array.isArray(archiveRes)
+            ? archiveRes
+            : archiveRes?.posts || []
+        );
+      })
+      .finally(() => setLoading(false));
+  }, []);
+
+  if (loading || !user) {
+    return (
+      <div className="min-h-screen bg-[#101922] flex items-center justify-center text-[#92adc9]">
+        Loading profile…
+      </div>
     );
+  }
 
-    apiFetch("/posts/archive").then((res) =>
-      setArchivePosts(
-        normalizePosts(Array.isArray(res) ? res : res.posts || [])
-      )
-    );
-  }, [router]);
-
-  if (!user) return null;
-
-  const list = tab === "posts" ? posts : archivePosts;
-
-  /* ================= STATS ================= */
-
-  const totalViews = [...posts, ...archivePosts].reduce(
-    (s, p) => s + p.view_count,
-    0
-  );
-  const devPoints = Math.floor(totalViews / 10 + posts.length * 5);
-
-  /* ================= ACTIONS ================= */
-
-  const savePost = async () => {
-    if (!editingId) return;
-
-    await apiFetch(`/updatepost/${editingId}`, {
-      method: "PUT",
-      body: JSON.stringify(draft),
-    });
-
-    setEditingId(null);
-    setDraft({});
-    location.reload();
-  };
-
-  const togglePublish = async (id: string, publish: boolean) => {
-    await apiFetch(`/updatepost/${id}`, {
-      method: "PUT",
-      body: JSON.stringify({ published: publish }),
-    });
-    location.reload();
-  };
-
-  const deletePost = async (id: string) => {
-    await apiFetch(`/deletepost/${id}`, { method: "DELETE" });
-    location.reload();
-  };
-
-
-  const chartData = {
-    labels: posts.map((p) => p.title || "Untitled"),
-    datasets: [
-      {
-        label: "Views",
-        data: posts.map((p) => p.view_count),
-        backgroundColor: "#137fec",
-      },
-    ],
-  };
-
+  const list = tab === "posts" ? posts : archive;
 
   return (
-    <main className="min-h-screen bg-[#101922] text-white px-4 pb-32">
+    <main className="min-h-screen bg-[#101922] px-3 lg:px-8 pb-24">
 
-      <div className="flex flex-col items-center mt-6">
-        <img
-          src={
-            user.profile_image ||
-            `https://api.dicebear.com/7.x/initials/svg?seed=${user.username}`
-          }
-          className="w-24 h-24 rounded-full border-4 border-primary"
-        />
-        <h2 className="mt-3 text-xl font-bold">@{user.username}</h2>
+      {/* ================= PROFILE HEADER ================= */}
+      <motion.div
+        initial={{ opacity: 0, y: 15 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="max-w-6xl mx-auto pt-6"
+      >
+        <div className="flex flex-col lg:flex-row lg:items-center gap-6">
 
-        <div className="flex gap-4 mt-4">
-          <Stat label="Posts" value={posts.length} />
-          <Stat label="Views" value={totalViews} />
-          <Stat label="Dev Points" value={devPoints} highlight />
-        </div>
+          <div className="flex items-center gap-4">
+            <img
+              src={
+                user.profile_image ||
+                `https://api.dicebear.com/7.x/initials/svg?seed=${user.username}`
+              }
+              className="w-20 h-20 rounded-full border-2 border-primary"
+              alt={user.username}
+            />
 
-        <div className="flex gap-4 mt-4">
-          <ActionButton
-            icon={<FiMessageCircle />}
-            label="Open Messages"
-            onClick={() => router.push("/messages")}
-          />
-          <ActionButton
-            icon={<FiBarChart2 />}
-            label="Analytics"
-            onClick={() => setShowAnalytics(true)}
-          />
-        </div>
-      </div>
+            <div>
+              <p className="text-2xl font-bold text-white">
+                @{user.username}
+              </p>
 
-      {/* TABS */}
-      <div className="flex justify-center gap-8 mt-10 border-b border-slate-800">
-        {["posts", "archive"].map((t) => (
-          <button
-            key={t}
-            onClick={() => setTab(t as any)}
-            className={`pb-2 font-semibold capitalize ${
-              tab === t
-                ? "text-primary border-b-2 border-primary"
-                : "text-slate-400"
-            }`}
-          >
-            {t}
-          </button>
-        ))}
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mt-6">
-        {list.map((post) => {
-          const isEditing = editingId === post.id;
-
-          return (
-            <div
-              key={post.id}
-              className="bg-[#192633] rounded-xl border border-slate-800 relative"
-            >
-              {post.image_url && (
-                <div className="relative aspect-video rounded-t-xl overflow-hidden">
-                  <Image
-                    src={post.image_url}
-                    alt={post.title}
-                    fill
-                    className="object-cover"
-                  />
-                </div>
-              )}
-
-              <div className="p-4">
-                <div className="flex justify-between">
-                  <h3 className="font-bold text-lg">
-                    {post.title || "Untitled"}
-                  </h3>
-
-                  <button
-                    onClick={() =>
-                      setMenuOpen(menuOpen === post.id ? null : post.id)
-                    }
-                  >
-                    <FiMoreVertical />
-                  </button>
-                </div>
-
-                {!isEditing && (
-                  <p className="text-slate-400 text-sm mt-2 line-clamp-2">
-                    {post.content}
-                  </p>
-                )}
-
-                {isEditing && (
-                  <div className="mt-3 space-y-3">
-                    <input
-                      className="w-full bg-[#233648] p-2 rounded"
-                      defaultValue={post.title}
-                      onChange={(e) =>
-                        setDraft((d) => ({ ...d, title: e.target.value }))
-                      }
-                    />
-                    <textarea
-                      className="w-full bg-[#233648] p-2 rounded h-24"
-                      defaultValue={post.content}
-                      onChange={(e) =>
-                        setDraft((d) => ({ ...d, content: e.target.value }))
-                      }
-                    />
-                    <div className="flex justify-end gap-3">
-                      <button
-                        onClick={() => setEditingId(null)}
-                        className="text-slate-400"
-                      >
-                        Cancel
-                      </button>
-                      <button
-                        onClick={savePost}
-                        className="bg-primary px-4 py-2 rounded"
-                      >
-                        Update
-                      </button>
-                    </div>
-                  </div>
-                )}
-
-                <div className="flex items-center gap-1 text-xs text-slate-400 mt-3">
-                  <FiEye /> {post.view_count}
-                </div>
-              </div>
-
-              {/* MENU */}
-              {menuOpen === post.id && (
-                <div className="absolute right-3 top-14 bg-[#233648] rounded-lg w-44 z-20">
-                  {tab === "posts" ? (
-                    <>
-                      <MenuItem
-                        icon={<FiEdit />}
-                        label="Edit"
-                        onClick={() => {
-                          setEditingId(post.id);
-                          setMenuOpen(null);
-                        }}
-                      />
-                      <MenuItem
-                        icon={<FiArchive />}
-                        label="Archive"
-                        onClick={() => togglePublish(post.id, false)}
-                      />
-                    </>
-                  ) : (
-                    <MenuItem
-                      icon={<FiUpload />}
-                      label="Publish"
-                      onClick={() => togglePublish(post.id, true)}
-                    />
-                  )}
-
-                  <MenuItem
-                    icon={<FiTrash />}
-                    label="Delete"
-                    danger
-                    onClick={() => deletePost(post.id)}
-                  />
-                </div>
-              )}
-            </div>
-          );
-        })}
-      </div>
-
-      {showAnalytics && (
-        <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center">
-          <div className="bg-[#192633] rounded-xl p-6 w-full max-w-2xl">
-            <h3 className="text-xl font-bold mb-4">Profile Analytics</h3>
-
-            <Bar data={chartData} />
-
-            <div className="flex justify-end mt-4">
               <button
-                onClick={() => setShowAnalytics(false)}
-                className="text-primary"
+                onClick={() => router.push("/messages")}
+                className="mt-2 flex items-center gap-2 text-primary text-sm font-semibold"
               >
-                Close
+                <FiMessageCircle />
+                Open chat
               </button>
             </div>
           </div>
+
+          <div className="flex gap-4 lg:ml-auto">
+            <Stat label="Posts" value={posts.length} />
+            <Stat
+              label="Views"
+              value={posts.reduce((a, b) => a + b.view_count, 0)}
+            />
+            <Stat
+              label="Dev Points"
+              value={Math.floor(
+                posts.reduce((a, b) => a + b.view_count, 0) / 10
+              )}
+            />
+          </div>
         </div>
-      )}
+
+        {/* ================= TABS ================= */}
+        <div className="flex gap-6 mt-8 border-b border-slate-800">
+          <Tab
+            active={tab === "posts"}
+            onClick={() => setTab("posts")}
+            label="Posts"
+          />
+          <Tab
+            active={tab === "archive"}
+            onClick={() => setTab("archive")}
+            label="Archive"
+          />
+        </div>
+      </motion.div>
+
+      {/* ================= POSTS GRID ================= */}
+      <div className="max-w-6xl mx-auto mt-6">
+        <AnimatePresence mode="wait">
+          <motion.div
+            key={tab}
+            initial={{ opacity: 0, y: 15 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0 }}
+            className="grid grid-cols-1 lg:grid-cols-2 gap-4"
+          >
+            {list.length === 0 && (
+              <p className="col-span-full text-center text-[#92adc9] py-12">
+                No {tab === "posts" ? "posts" : "archived posts"} yet
+              </p>
+            )}
+
+            {list.map((post) => (
+              <PostCard key={post.id} post={post} />
+            ))}
+          </motion.div>
+        </AnimatePresence>
+      </div>
     </main>
   );
 }
 
+/* ================= COMPONENTS ================= */
 
-function Stat({ label, value, highlight }: any) {
-  return (
-    <div
-      className={`px-4 py-2 rounded-xl text-center border ${
-        highlight
-          ? "border-primary bg-primary/10 text-primary"
-          : "border-slate-700"
-      }`}
-    >
-      <p className="font-bold">{value}</p>
-      <p className="text-xs text-slate-400">{label}</p>
-    </div>
-  );
-}
-
-function ActionButton({ icon, label, onClick }: any) {
+function Tab({
+  label,
+  active,
+  onClick,
+}: {
+  label: string;
+  active: boolean;
+  onClick: () => void;
+}) {
   return (
     <button
       onClick={onClick}
-      className="flex items-center gap-2 text-primary hover:scale-105 transition"
+      className={`pb-3 text-sm font-bold transition
+        ${active
+          ? "text-primary border-b-2 border-primary"
+          : "text-slate-400 hover:text-white"}
+      `}
     >
-      {icon}
       {label}
     </button>
   );
 }
 
-function MenuItem({ icon, label, danger, onClick }: any) {
+function Stat({ label, value }: { label: string; value: number }) {
+  return (
+    <div className="bg-[#192633] rounded-xl px-4 py-3 text-center min-w-[90px]">
+      <p className="text-xs text-[#92adc9]">{label}</p>
+      <p className="text-xl font-bold text-white">{value}</p>
+    </div>
+  );
+}
+
+function PostCard({ post }: { post: Post }) {
+  const router = useRouter();
+  const [menu, setMenu] = useState(false);
+  const [imgLoaded, setImgLoaded] = useState(false);
+
+  return (
+    <motion.div
+      layout
+      whileHover={{ scale: 1.01 }}
+      className="bg-[#192633] rounded-xl border border-slate-800 overflow-hidden"
+    >
+      {post.image_url && (
+        <div className="relative aspect-video bg-slate-800">
+          {!imgLoaded && (
+            <div className="absolute inset-0 animate-pulse bg-slate-700" />
+          )}
+          <Image
+            src={post.image_url}
+            alt={post.title}
+            fill
+            className={`object-cover transition-opacity ${
+              imgLoaded ? "opacity-100" : "opacity-0"
+            }`}
+            onLoadingComplete={() => setImgLoaded(true)}
+          />
+        </div>
+      )}
+
+      <div className="p-4 space-y-2">
+        <div className="flex justify-between items-start">
+          <h3 className="text-white font-bold text-lg line-clamp-2">
+            {post.title || "Untitled post"}
+          </h3>
+
+          <div className="relative">
+            <button onClick={() => setMenu(!menu)}>
+              <FiMoreVertical />
+            </button>
+
+            {menu && (
+              <div className="absolute right-0 mt-2 w-36 bg-[#101922] border border-slate-800 rounded-xl shadow-xl z-20">
+                <MenuItem icon={<FiEdit2 />} label="Edit" />
+                <MenuItem icon={<FiArchive />} label="Archive" />
+                <MenuItem
+                  icon={<FiTrash2 />}
+                  label="Delete"
+                  danger
+                />
+              </div>
+            )}
+          </div>
+        </div>
+
+        <p className="text-sm text-[#92adc9] line-clamp-2">
+          {post.content || "No content"}
+        </p>
+
+        <div className="flex items-center justify-between pt-3 border-t border-slate-800 text-xs text-[#92adc9]">
+          <div className="flex items-center gap-1">
+            <FiEye />
+            {post.view_count}
+          </div>
+
+          {post.published && (
+            <button
+              onClick={() => router.push(`/post/${post.slug}`)}
+              className="text-primary font-semibold"
+            >
+              View
+            </button>
+          )}
+        </div>
+      </div>
+    </motion.div>
+  );
+}
+
+function MenuItem({
+  icon,
+  label,
+  danger,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  danger?: boolean;
+}) {
   return (
     <button
-      onClick={onClick}
-      className={`flex items-center gap-2 px-4 py-2 w-full hover:bg-slate-700 ${
-        danger ? "text-red-400" : "text-white"
-      }`}
+      className={`flex items-center gap-2 px-4 py-2 text-sm w-full text-left
+        ${danger ? "text-red-400" : "text-white"}
+        hover:bg-slate-800`}
     >
       {icon}
       {label}
