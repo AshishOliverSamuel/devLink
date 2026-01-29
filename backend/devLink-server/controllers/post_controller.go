@@ -262,9 +262,9 @@ func GetPostBySlug(client *mongo.Client) gin.HandlerFunc {
 
 func UpdatePost(client *mongo.Client) gin.HandlerFunc {
 	return func(c *gin.Context) {
+
 		postId := c.Param("id")
 		userId, exists := c.Get("user_id")
-
 		if !exists {
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
 			return
@@ -280,7 +280,10 @@ func UpdatePost(client *mongo.Client) gin.HandlerFunc {
 		collection := database.OpenCollection("posts", client)
 
 		var post models.Post
-		if err := collection.FindOne(context.Background(), bson.M{"_id": postObjId}).Decode(&post); err != nil {
+		if err := collection.FindOne(
+			context.Background(),
+			bson.M{"_id": postObjId},
+		).Decode(&post); err != nil {
 			c.JSON(http.StatusNotFound, gin.H{"error": "Post not found"})
 			return
 		}
@@ -291,11 +294,11 @@ func UpdatePost(client *mongo.Client) gin.HandlerFunc {
 		}
 
 		var data struct {
-			Title     string   `json:"title"`
-			Content   string   `json:"content"`
-			ImageURL  string   `json:"image_url"`
+			Title     *string  `json:"title"`
+			Content   *string  `json:"content"`
+			ImageURL  *string  `json:"image_url"`
 			Tags      []string `json:"tags"`
-			Published bool     `json:"published"`
+			Published *bool    `json:"published"`
 		}
 
 		if err := c.ShouldBindJSON(&data); err != nil {
@@ -303,19 +306,42 @@ func UpdatePost(client *mongo.Client) gin.HandlerFunc {
 			return
 		}
 
-		collection.UpdateOne(
+		set := bson.M{}
+
+		if data.Title != nil {
+			set["title"] = *data.Title
+			set["slug"] = GenerateUniqueSlug(*data.Title)
+		}
+		if data.Content != nil {
+			set["content"] = *data.Content
+		}
+		if data.ImageURL != nil {
+			set["image_url"] = *data.ImageURL
+		}
+		if data.Tags != nil {
+			set["tags"] = data.Tags
+		}
+		if data.Published != nil {
+			set["published"] = *data.Published
+		}
+
+		if len(set) == 0 {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Nothing to update"})
+			return
+		}
+
+		set["updated_at"] = time.Now()
+
+		_, err = collection.UpdateOne(
 			context.Background(),
 			bson.M{"_id": postObjId},
-			bson.M{"$set": bson.M{
-				"title":      data.Title,
-				"content":    data.Content,
-				"image_url":  data.ImageURL,
-				"tags":       data.Tags,
-				"published":  data.Published,
-				"updated_at": time.Now(),
-				"slug":       GenerateUniqueSlug(data.Title),
-			}},
+			bson.M{"$set": set},
 		)
+
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Update failed"})
+			return
+		}
 
 		c.JSON(http.StatusOK, gin.H{"message": "Post updated"})
 	}
