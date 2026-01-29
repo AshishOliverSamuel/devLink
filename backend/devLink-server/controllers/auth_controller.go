@@ -8,6 +8,7 @@ import (
 	"math/big"
 	"net/http"
 	"time"
+	"net/url"
 
 	"github.com/ayushmehta03/devLink-backend/utils"
 
@@ -88,11 +89,15 @@ func RegisterUser(client *mongo.Client) gin.HandlerFunc {
 			return
 		}
 
+seed := user.UserName
+if seed == "" {
+    seed = user.Email
+}
 
-		    avatarURL := fmt.Sprintf(
-        "https://api.dicebear.com/7.x/initials/svg?seed=%s",
-    user.UserName,
-    )
+avatarURL := fmt.Sprintf(
+    "https://api.dicebear.com/7.x/initials/svg?seed=%s",
+    url.QueryEscape(seed),
+)
 
 
 		
