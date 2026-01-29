@@ -59,6 +59,7 @@ c.JSON(http.StatusOK, gin.H{
 			"user": gin.H{
 				"name": user.UserName,
 				"bio":  user.Bio,
+				"profile_image":user.ProfileImage,
 			},
 			"posts": posts,
 		})	}
@@ -107,6 +108,7 @@ func SearchUsers(client *mongo.Client)gin.HandlerFunc{
 		users=append(users, gin.H{
 			"name":user.UserName,
 			"bio":user.Bio,
+			"profile_pic":user.ProfileImage,
 		})
 	}
 
