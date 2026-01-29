@@ -2,23 +2,46 @@
 
 import { useEffect, useState } from "react";
 import Image from "next/image";
-import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { apiFetch } from "@/lib/api";
 import {
-  FiEdit2,
-  FiTrash2,
-  FiArchive,
   FiMoreVertical,
+  FiEdit2,
+  FiArchive,
+  FiTrash2,
   FiEye,
-  FiMessageCircle,
+  FiMail,
+  FiX,
 } from "react-icons/fi";
+
+import {
+  Chart as ChartJS,
+  CategoryScale,
+  LinearScale,
+  BarElement,
+  LineElement,
+  PointElement,
+  Tooltip,
+  Legend,
+} from "chart.js";
+import { Line, Bar } from "react-chartjs-2";
+
+ChartJS.register(
+  CategoryScale,
+  LinearScale,
+  BarElement,
+  LineElement,
+  PointElement,
+  Tooltip,
+  Legend
+);
 
 /* ================= TYPES ================= */
 
 type User = {
   id: string;
   username: string;
+  email: string;
   profile_image?: string;
 };
 
@@ -35,15 +58,12 @@ type Post = {
 /* ================= PAGE ================= */
 
 export default function MyProfilePage() {
-  const router = useRouter();
-
   const [user, setUser] = useState<User | null>(null);
   const [posts, setPosts] = useState<Post[]>([]);
   const [archive, setArchive] = useState<Post[]>([]);
-  const [tab, setTab] = useState<"posts" | "archive">("posts");
+  const [tab, setTab] = useState<"posts" | "archive" | "analytics">("posts");
+  const [editing, setEditing] = useState<Post | null>(null);
   const [loading, setLoading] = useState(true);
-
-  /* ================= FETCH ================= */
 
   useEffect(() => {
     Promise.all([
@@ -51,20 +71,10 @@ export default function MyProfilePage() {
       apiFetch("/posts/me"),
       apiFetch("/posts/archive"),
     ])
-      .then(([me, postsRes, archiveRes]) => {
+      .then(([me, p, a]) => {
         setUser(me);
-
-        setPosts(
-          Array.isArray(postsRes)
-            ? postsRes
-            : postsRes?.posts || []
-        );
-
-        setArchive(
-          Array.isArray(archiveRes)
-            ? archiveRes
-            : archiveRes?.posts || []
-        );
+        setPosts(Array.isArray(p) ? p : p.posts || []);
+        setArchive(Array.isArray(a) ? a : a.posts || []);
       })
       .finally(() => setLoading(false));
   }, []);
@@ -77,101 +87,248 @@ export default function MyProfilePage() {
     );
   }
 
+  const totalViews = posts.reduce((a, b) => a + b.view_count, 0);
+  const devPoints = Math.floor(totalViews / 10);
+
+  const refresh = async () => {
+    const [p, a] = await Promise.all([
+      apiFetch("/posts/me"),
+      apiFetch("/posts/archive"),
+    ]);
+    setPosts(Array.isArray(p) ? p : p.posts || []);
+    setArchive(Array.isArray(a) ? a : a.posts || []);
+  };
+
+  const updatePost = async (data: Partial<Post>) => {
+    if (!editing) return;
+
+    await apiFetch(`/updatepost/${editing.id}`, {
+      method: "PUT",
+      body: JSON.stringify({
+        title: data.title,
+        content: data.content,
+        image_url: data.image_url,
+        published: editing.published,
+        tags: [],
+      }),
+    });
+
+    setEditing(null);
+    refresh();
+  };
+
+  const archivePost = async (post: Post) => {
+    await apiFetch(`/updatepost/${post.id}`, {
+      method: "PUT",
+      body: JSON.stringify({ ...post, published: false }),
+    });
+    refresh();
+  };
+
+  const publishPost = async (post: Post) => {
+    await apiFetch(`/updatepost/${post.id}`, {
+      method: "PUT",
+      body: JSON.stringify({ ...post, published: true }),
+    });
+    refresh();
+  };
+
+  const deletePost = async (id: string) => {
+    await apiFetch(`/deletepost/${id}`, { method: "DELETE" });
+    refresh();
+  };
+
   const list = tab === "posts" ? posts : archive;
 
   return (
     <main className="min-h-screen bg-[#101922] px-3 lg:px-8 pb-24">
-
-      {/* ================= PROFILE HEADER ================= */}
-      <motion.div
-        initial={{ opacity: 0, y: 15 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="max-w-6xl mx-auto pt-6"
-      >
-        <div className="flex flex-col lg:flex-row lg:items-center gap-6">
-
-          <div className="flex items-center gap-4">
+      {/* PROFILE */}
+      <div className="max-w-6xl mx-auto pt-6">
+        <div className="flex flex-col lg:flex-row gap-6">
+          <div className="flex gap-4 items-center">
             <img
               src={
                 user.profile_image ||
                 `https://api.dicebear.com/7.x/initials/svg?seed=${user.username}`
               }
               className="w-20 h-20 rounded-full border-2 border-primary"
-              alt={user.username}
             />
-
             <div>
-              <p className="text-2xl font-bold text-white">
-                @{user.username}
-              </p>
-
-              <button
-                onClick={() => router.push("/messages")}
-                className="mt-2 flex items-center gap-2 text-primary text-sm font-semibold"
-              >
-                <FiMessageCircle />
-                Open chat
-              </button>
+              <p className="text-2xl font-bold text-white">@{user.username}</p>
+              <div className="flex items-center gap-2 text-[#92adc9] text-sm">
+                <FiMail /> {user.email}
+              </div>
             </div>
           </div>
 
           <div className="flex gap-4 lg:ml-auto">
             <Stat label="Posts" value={posts.length} />
-            <Stat
-              label="Views"
-              value={posts.reduce((a, b) => a + b.view_count, 0)}
-            />
-            <Stat
-              label="Dev Points"
-              value={Math.floor(
-                posts.reduce((a, b) => a + b.view_count, 0) / 10
-              )}
-            />
+            <Stat label="Views" value={totalViews} />
+            <Stat label="Dev Points" value={devPoints} />
           </div>
         </div>
 
-        {/* ================= TABS ================= */}
+        {/* TABS */}
         <div className="flex gap-6 mt-8 border-b border-slate-800">
+          <Tab label="Posts" active={tab === "posts"} onClick={() => setTab("posts")} />
+          <Tab label="Archive" active={tab === "archive"} onClick={() => setTab("archive")} />
           <Tab
-            active={tab === "posts"}
-            onClick={() => setTab("posts")}
-            label="Posts"
-          />
-          <Tab
-            active={tab === "archive"}
-            onClick={() => setTab("archive")}
-            label="Archive"
+            label="Analytics"
+            active={tab === "analytics"}
+            onClick={() => setTab("analytics")}
           />
         </div>
-      </motion.div>
-
-      {/* ================= POSTS GRID ================= */}
-      <div className="max-w-6xl mx-auto mt-6">
-        <AnimatePresence mode="wait">
-          <motion.div
-            key={tab}
-            initial={{ opacity: 0, y: 15 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0 }}
-            className="grid grid-cols-1 lg:grid-cols-2 gap-4"
-          >
-            {list.length === 0 && (
-              <p className="col-span-full text-center text-[#92adc9] py-12">
-                No {tab === "posts" ? "posts" : "archived posts"} yet
-              </p>
-            )}
-
-            {list.map((post) => (
-              <PostCard key={post.id} post={post} />
-            ))}
-          </motion.div>
-        </AnimatePresence>
       </div>
+
+      {/* CONTENT */}
+      <div className="max-w-6xl mx-auto mt-6">
+        {tab !== "analytics" ? (
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            {list.map((post) => (
+              <PostCard
+                key={post.id}
+                post={post}
+                onEdit={() => setEditing(post)}
+                onArchive={() => archivePost(post)}
+                onPublish={() => publishPost(post)}
+                onDelete={() => deletePost(post.id)}
+              />
+            ))}
+          </div>
+        ) : (
+          <AnalyticsSection posts={posts} />
+        )}
+      </div>
+
+      <AnimatePresence>
+        {editing && (
+          <EditorModal
+            post={editing}
+            onClose={() => setEditing(null)}
+            onSave={updatePost}
+          />
+        )}
+      </AnimatePresence>
     </main>
   );
 }
 
-/* ================= COMPONENTS ================= */
+/* ================= POST CARD ================= */
+
+function PostCard({
+  post,
+  onEdit,
+  onArchive,
+  onPublish,
+  onDelete,
+}: {
+  post: Post;
+  onEdit: () => void;
+  onArchive: () => void;
+  onPublish: () => void;
+  onDelete: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <motion.div
+      whileHover={{ scale: 1.01 }}
+      className="bg-[#192633] rounded-xl border border-slate-800 relative"
+    >
+      {post.image_url && (
+        <div className="relative aspect-video">
+          <Image src={post.image_url} alt="" fill className="object-cover" />
+        </div>
+      )}
+
+      <div className="p-4 space-y-2">
+        <div className="flex justify-between">
+          <h3 className="text-white font-bold">{post.title || "Untitled"}</h3>
+
+          <button onClick={() => setOpen(!open)}>
+            <FiMoreVertical />
+          </button>
+
+          {open && (
+            <div className="absolute right-4 top-10 w-40 bg-[#101922]
+              border border-slate-800 rounded-xl z-50 shadow-xl">
+              {post.published ? (
+                <>
+                  <MenuItem label="Edit" onClick={onEdit} />
+                  <MenuItem label="Archive" onClick={onArchive} />
+                </>
+              ) : (
+                <MenuItem label="Publish" onClick={onPublish} />
+              )}
+              <MenuItem label="Delete" danger onClick={onDelete} />
+            </div>
+          )}
+        </div>
+
+        <p className="text-sm text-[#92adc9] line-clamp-2">
+          {post.content || "No content"}
+        </p>
+
+        <div className="flex items-center gap-1 text-xs text-[#92adc9]">
+          <FiEye /> {post.view_count}
+        </div>
+      </div>
+    </motion.div>
+  );
+}
+
+/* ================= ANALYTICS ================= */
+
+function AnalyticsSection({ posts }: { posts: Post[] }) {
+  const labels = posts.map((_, i) => `Post ${i + 1}`);
+  const views = posts.map((p) => p.view_count);
+
+  return (
+    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className="bg-[#192633] p-4 rounded-xl">
+        <Line
+          data={{
+            labels,
+            datasets: [
+              {
+                label: "Views",
+                data: views,
+                borderColor: "#137fec",
+                backgroundColor: "rgba(19,127,236,0.3)",
+              },
+            ],
+          }}
+        />
+      </div>
+
+      <div className="bg-[#192633] p-4 rounded-xl">
+        <Bar
+          data={{
+            labels,
+            datasets: [
+              {
+                label: "Dev Points",
+                data: views.map((v) => Math.floor(v / 10)),
+                backgroundColor: "#22c55e",
+              },
+            ],
+          }}
+        />
+      </div>
+    </div>
+  );
+}
+
+/* ================= UI ================= */
+
+function Stat({ label, value }: { label: string; value: number }) {
+  return (
+    <div className="bg-[#192633] px-4 py-3 rounded-xl text-center">
+      <p className="text-xs text-[#92adc9]">{label}</p>
+      <p className="text-xl font-bold text-white">{value}</p>
+    </div>
+  );
+}
 
 function Tab({
   label,
@@ -185,120 +342,117 @@ function Tab({
   return (
     <button
       onClick={onClick}
-      className={`pb-3 text-sm font-bold transition
-        ${active
+      className={`pb-3 text-sm font-bold ${
+        active
           ? "text-primary border-b-2 border-primary"
-          : "text-slate-400 hover:text-white"}
-      `}
+          : "text-slate-400 hover:text-white"
+      }`}
     >
       {label}
     </button>
-  );
-}
-
-function Stat({ label, value }: { label: string; value: number }) {
-  return (
-    <div className="bg-[#192633] rounded-xl px-4 py-3 text-center min-w-[90px]">
-      <p className="text-xs text-[#92adc9]">{label}</p>
-      <p className="text-xl font-bold text-white">{value}</p>
-    </div>
-  );
-}
-
-function PostCard({ post }: { post: Post }) {
-  const router = useRouter();
-  const [menu, setMenu] = useState(false);
-  const [imgLoaded, setImgLoaded] = useState(false);
-
-  return (
-    <motion.div
-      layout
-      whileHover={{ scale: 1.01 }}
-      className="bg-[#192633] rounded-xl border border-slate-800 overflow-hidden"
-    >
-      {post.image_url && (
-        <div className="relative aspect-video bg-slate-800">
-          {!imgLoaded && (
-            <div className="absolute inset-0 animate-pulse bg-slate-700" />
-          )}
-          <Image
-            src={post.image_url}
-            alt={post.title}
-            fill
-            className={`object-cover transition-opacity ${
-              imgLoaded ? "opacity-100" : "opacity-0"
-            }`}
-            onLoadingComplete={() => setImgLoaded(true)}
-          />
-        </div>
-      )}
-
-      <div className="p-4 space-y-2">
-        <div className="flex justify-between items-start">
-          <h3 className="text-white font-bold text-lg line-clamp-2">
-            {post.title || "Untitled post"}
-          </h3>
-
-          <div className="relative">
-            <button onClick={() => setMenu(!menu)}>
-              <FiMoreVertical />
-            </button>
-
-            {menu && (
-              <div className="absolute right-0 mt-2 w-36 bg-[#101922] border border-slate-800 rounded-xl shadow-xl z-20">
-                <MenuItem icon={<FiEdit2 />} label="Edit" />
-                <MenuItem icon={<FiArchive />} label="Archive" />
-                <MenuItem
-                  icon={<FiTrash2 />}
-                  label="Delete"
-                  danger
-                />
-              </div>
-            )}
-          </div>
-        </div>
-
-        <p className="text-sm text-[#92adc9] line-clamp-2">
-          {post.content || "No content"}
-        </p>
-
-        <div className="flex items-center justify-between pt-3 border-t border-slate-800 text-xs text-[#92adc9]">
-          <div className="flex items-center gap-1">
-            <FiEye />
-            {post.view_count}
-          </div>
-
-          {post.published && (
-            <button
-              onClick={() => router.push(`/post/${post.slug}`)}
-              className="text-primary font-semibold"
-            >
-              View
-            </button>
-          )}
-        </div>
-      </div>
-    </motion.div>
   );
 }
 
 function MenuItem({
-  icon,
   label,
   danger,
+  onClick,
 }: {
-  icon: React.ReactNode;
   label: string;
   danger?: boolean;
+  onClick: () => void;
 }) {
   return (
     <button
-      className={`flex items-center gap-2 px-4 py-2 text-sm w-full text-left
-        ${danger ? "text-red-400" : "text-white"}
-        hover:bg-slate-800`}
+      onClick={onClick}
+      className={`w-full px-4 py-2 text-sm text-left ${
+        danger ? "text-red-400" : "text-white"
+      } hover:bg-slate-800`}
     >
-      {icon}
       {label}
     </button>
+  );
+}
+
+/* ================= EDITOR ================= */
+
+function EditorModal({
+  post,
+  onClose,
+  onSave,
+}: {
+  post: Post;
+  onClose: () => void;
+  onSave: (data: Partial<Post>) => void;
+}) {
+  const [title, setTitle] = useState(post.title);
+  const [content, setContent] = useState(post.content);
+  const [image, setImage] = useState(post.image_url || "");
+
+  return (
+    <motion.div
+      className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center px-3"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+    >
+      <motion.div
+        initial={{ scale: 0.9 }}
+        animate={{ scale: 1 }}
+        exit={{ scale: 0.9 }}
+        className="bg-[#101922] rounded-xl max-w-lg w-full p-5 space-y-4"
+      >
+        <div className="flex justify-between">
+          <p className="text-white font-bold">Edit Post</p>
+          <button onClick={onClose}>
+            <FiX />
+          </button>
+        </div>
+
+        <input
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
+          className="w-full bg-[#192633] px-3 py-2 rounded-lg text-white"
+          placeholder="Title"
+        />
+
+        <textarea
+          value={content}
+          onChange={(e) => setContent(e.target.value)}
+          rows={5}
+          className="w-full bg-[#192633] px-3 py-2 rounded-lg text-white"
+          placeholder="Content"
+        />
+
+        <input
+          value={image}
+          onChange={(e) => setImage(e.target.value)}
+          className="w-full bg-[#192633] px-3 py-2 rounded-lg text-white"
+          placeholder="Image URL"
+        />
+
+        {image && (
+          <button
+            onClick={() => setImage("")}
+            className="text-red-400 text-sm"
+          >
+            Remove image
+          </button>
+        )}
+
+        <button
+          onClick={() =>
+            onSave({
+              title,
+              content,
+              image_url: image || "",
+            })
+          }
+          className="w-full bg-primary py-2 rounded-lg text-white font-bold"
+        >
+          Update Post
+        </button>
+      </motion.div>
+    </motion.div>
   );
 }

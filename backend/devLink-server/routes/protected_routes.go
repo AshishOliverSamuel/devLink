@@ -14,7 +14,6 @@ func ProtectedRoutes(router *gin.Engine,client *mongo.Client){
 	protected.Use(middleware.AuthMiddleWare())
 
 	protected.GET("/posts", controllers.GetAllPosts(client))
-     protected.GET("/posts/:slug", controllers.GetPostBySlug(client))
     protected.GET("/users/:userId", controllers.GetUserProfile(client))
  	 protected.GET("/search/users",controllers.SearchUsers(client))
 	 protected.GET("/posts/tags",controllers.SearchPost(client))

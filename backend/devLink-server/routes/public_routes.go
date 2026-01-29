@@ -11,5 +11,6 @@ func PublicRoutes(router *gin.Engine,client *mongo.Client){
 
 
 	router.GET("/home",controllers.GetHomeFeed(client));
+	 router.GET("/posts/:slug", controllers.GetPostBySlug(client))
 
 }
