@@ -175,3 +175,55 @@ func SearchPost(client *mongo.Client) gin.HandlerFunc{
 
 	}
 }
+
+
+func GetUserProfileStats(client *mongo.Client) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		userId := c.Param("id")
+
+		userObjId, err := bson.ObjectIDFromHex(userId)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid user ID"})
+			return
+		}
+
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+
+		postCollection := database.OpenCollection("posts", client)
+
+		pipeline := []bson.M{
+			{
+				"$match": bson.M{
+					"author_id": userObjId,
+					"published": true,
+				},
+			},
+			{
+				"$group": bson.M{
+					"_id":        nil,
+					"totalPosts": bson.M{"$sum": 1},
+					"totalViews": bson.M{"$sum": "$view_count"},
+				},
+			},
+		}
+
+		cursor, _ := postCollection.Aggregate(ctx, pipeline)
+
+		var result []bson.M
+		cursor.All(ctx, &result)
+
+		if len(result) == 0 {
+			c.JSON(http.StatusOK, gin.H{
+				"total_posts": 0,
+				"total_views": 0,
+			})
+			return
+		}
+
+		c.JSON(http.StatusOK, gin.H{
+			"total_posts": result[0]["totalPosts"],
+			"total_views": result[0]["totalViews"],
+		})
+	}
+}

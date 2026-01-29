@@ -20,7 +20,7 @@ func ProtectedRoutes(router *gin.Engine,client *mongo.Client){
 	 protected.GET("/posts/tags",controllers.SearchPost(client))
 	 protected.GET("/posts/trending", controllers.GetTrendingPosts(client))
 	
-
+	protected.GET("/users/:id/stats", controllers.GetUserProfileStats(client))
 	protected.POST("/createpost",controllers.CreatePost(client))
 	protected.PUT("/updatepost/:id", controllers.UpdatePost(client))
 	protected.DELETE("/deletepost/:id",controllers.DeletePost(client))
