@@ -3,6 +3,7 @@ package controllers
 import (
 	"context"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/ayushmehta03/devLink-backend/database"
@@ -12,9 +13,15 @@ import (
 	"go.mongodb.org/mongo-driver/v2/mongo"
 )
 
+type SuggestedUser struct {
+	ID           string `json:"id" bson:"_id"`
+	Username     string `json:"username" bson:"username"`
+	ProfileImage string `json:"profile_image,omitempty" bson:"profile_image,omitempty"`
+}
 
 func GetUserProfile(client *mongo.Client )gin.HandlerFunc{
 	return func(c* gin.Context){
+		
 
 
 		userId:=c.Param("userId")
@@ -228,27 +235,63 @@ func GetUserProfileStats(client *mongo.Client) gin.HandlerFunc {
 	}
 }
 
-func SearchByTime(client *mongo.Client) gin.HandlerFunc{
-	return func(c *gin.Context){
 
-		ctx,cancel:=context.WithTimeout(context.Background(),10*time.Second)
+
+
+
+func GetSuggestedUsers(client *mongo.Client) gin.HandlerFunc {
+	return func(c *gin.Context) {
+
+		userID := c.GetString("userId") 
+		limitParam := c.DefaultQuery("limit", "5")
+
+		limit, err := strconv.Atoi(limitParam)
+		if err != nil || limit <= 0 {
+			limit = 5
+		}
+
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 
-		postCollection:=database.OpenCollection("posts",client)
+		usersCollection := client.Database("devlink").Collection("users")
 
-		var time struct{
-			Time string `json:"time_period"`
+		filter := bson.M{
+			"_id": bson.M{"$ne": userID},
 		}
 
-		if err:= c.ShouldBindJSON(&time);err!=nil{
-			c.JSON(http.StatusBadRequest,gin.H{"error":"Invalid time period given "});
-			return 
+		pipeline := mongo.Pipeline{
+			{{Key: "$match", Value: filter}},
+			{{Key: "$sort", Value: bson.M{
+				"last_active": -1,
+				"created_at": -1,
+			}}},
+			{{Key: "$limit", Value: limit}},
+			{{Key: "$project", Value: bson.M{
+				"_id":           1,
+				"username":      1,
+				"profile_image": 1,
+			}}},
 		}
-		
 
+		cursor, err := usersCollection.Aggregate(ctx, pipeline)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"error": "Failed to fetch suggested users",
+			})
+			return
+		}
+		defer cursor.Close(ctx)
 
+		var users []SuggestedUser
+		if err := cursor.All(ctx, &users); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"error": "Failed to parse suggested users",
+			})
+			return
+		}
 
-
-
+		c.JSON(http.StatusOK, gin.H{
+			"users": users,
+		})
 	}
 }
