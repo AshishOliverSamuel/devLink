@@ -227,3 +227,28 @@ func GetUserProfileStats(client *mongo.Client) gin.HandlerFunc {
 		})
 	}
 }
+
+func SearchByTime(client *mongo.Client) gin.HandlerFunc{
+	return func(c *gin.Context){
+
+		ctx,cancel:=context.WithTimeout(context.Background(),10*time.Second)
+		defer cancel()
+
+		postCollection:=database.OpenCollection("posts",client)
+
+		var time struct{
+			Time string `json:"time_period"`
+		}
+
+		if err:= c.ShouldBindJSON(&time);err!=nil{
+			c.JSON(http.StatusBadRequest,gin.H{"error":"Invalid time period given "});
+			return 
+		}
+		
+
+
+
+
+
+	}
+}

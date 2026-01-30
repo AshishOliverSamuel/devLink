@@ -133,6 +133,7 @@ export default function DashboardPage() {
               <input
                 placeholder="Search posts, developers, or tags"
                 className="bg-transparent outline-none text-sm w-full text-white placeholder-[#92adc9]"
+                
               />
             </div>
           </div>
