@@ -1,14 +1,14 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
-import { FiSearch } from "react-icons/fi";
+import { useRouter } from "next/navigation";
+import Image from "next/image";
+import { motion, AnimatePresence } from "framer-motion";
+import { ArrowLeft, Search, Filter } from "lucide-react";
 import { apiFetch } from "@/lib/api";
 
-
 type User = {
-  id: string;              
-  user_id?: string;
+  id: string;
   username: string;
   profile_image?: string;
 };
@@ -17,216 +17,270 @@ type Post = {
   id: string;
   title: string;
   slug: string;
-  content: string;
-  tags?: string[];
+  tags: string[];
+  image_url?: string;
+  created_at: string;
+  author: {
+    id: string;
+    username: string;
+    profile_image?: string;
+  };
 };
-
 
 export default function SearchPage() {
   const router = useRouter();
-  const params = useSearchParams();
 
-  const [query, setQuery] = useState(params.get("q") || "");
+  const [query, setQuery] = useState("");
   const [tab, setTab] = useState<"posts" | "users">("posts");
-
   const [posts, setPosts] = useState<Post[]>([]);
   const [users, setUsers] = useState<User[]>([]);
-  const [suggestedUsers, setSuggestedUsers] = useState<User[]>([]);
+  const [suggested, setSuggested] = useState<User[]>([]);
   const [loading, setLoading] = useState(false);
 
-  /* ================= SUGGESTED USERS ================= */
+  /* ================= Suggested Users ================= */
 
   useEffect(() => {
-    if (query.trim().length === 0) {
+    if (!query) {
       apiFetch("/users/suggested?limit=6")
-        .then((res) => setSuggestedUsers(res.users || []))
-        .catch(console.error);
+        .then((res) => setSuggested(res.users || []));
     }
   }, [query]);
 
-  /* ================= SEARCH ================= */
+  /* ================= Search ================= */
 
   useEffect(() => {
-    // ⛔ Never call search APIs for empty / short query
-    if (!query || query.trim().length < 2) {
+    if (query.trim().length < 2) {
       setPosts([]);
       setUsers([]);
-      setLoading(false);
       return;
     }
 
     setLoading(true);
-
     const timer = setTimeout(async () => {
       try {
         if (tab === "posts") {
-          // ✅ CORRECT PARAM: t
-          const res = await apiFetch(
-            `/posts/tags?t=${encodeURIComponent(query.trim())}`
-          );
+          const res = await apiFetch(`/posts/tags?t=${query}`);
           setPosts(res.posts || []);
         } else {
-          // ✅ CORRECT PARAM: q
-          const res = await apiFetch(
-            `/search/users?q=${encodeURIComponent(query.trim())}`
-          );
+          const res = await apiFetch(`/search/users?q=${query}`);
           setUsers(res.users || []);
         }
-      } catch (err) {
-        console.error("Search failed:", err);
       } finally {
         setLoading(false);
       }
-    }, 400);
+    }, 350);
 
     return () => clearTimeout(timer);
   }, [query, tab]);
 
-
   return (
-    <main className="min-h-screen bg-[#101922] flex justify-center">
-      <div className="w-full max-w-3xl px-4 pb-28">
+    <main className="min-h-screen bg-[#0f172a] text-white">
+      <div className="max-w-5xl mx-auto px-4 pb-24">
 
-        <div className="sticky top-0 z-50 bg-[#101922]/90 backdrop-blur pt-4">
-          <div className="flex items-center gap-3 bg-[#233648] h-12 rounded-xl px-4">
-            <FiSearch className="text-[#92adc9]" />
+        {/* ================= HEADER ================= */}
+        <header className="sticky top-0 z-40 bg-[#0f172a]/90 backdrop-blur">
+          <div className="flex items-center gap-4 py-4">
+            <button
+              onClick={() => router.back()}
+              className="p-2 rounded-lg hover:bg-white/10 transition"
+            >
+              <ArrowLeft />
+            </button>
+
+            <h1 className="text-xl font-bold flex-1">Search</h1>
+
+            <Filter className="text-blue-400" />
+          </div>
+
+          {/* Search Bar */}
+          <div className="flex items-center bg-[#1e293b] rounded-xl h-12 px-4">
+            <Search className="text-slate-400" size={18} />
             <input
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder="Search posts, developers, or tags"
-              className="bg-transparent outline-none text-sm w-full text-white placeholder-[#92adc9]"
-              autoFocus
+              placeholder="Search posts, users or tags"
+              className="bg-transparent outline-none w-full ml-3 text-sm placeholder-slate-400"
             />
           </div>
 
-          {/* ===== TABS ===== */}
-          <div className="flex mt-4 border-b border-slate-800">
-            <Tab label="Posts" active={tab === "posts"} onClick={() => setTab("posts")} />
-            <Tab label="Users" active={tab === "users"} onClick={() => setTab("users")} />
+          {/* Tabs */}
+          <div className="flex mt-4 border-b border-slate-700">
+            <Tab active={tab === "posts"} onClick={() => setTab("posts")}>
+              Posts
+            </Tab>
+            <Tab active={tab === "users"} onClick={() => setTab("users")}>
+              Users
+            </Tab>
           </div>
-        </div>
+        </header>
 
-        {/* ===== CONTENT ===== */}
-        <div className="mt-4 space-y-4">
+        {/* ================= CONTENT ================= */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mt-6">
 
-          {/* ===== EMPTY QUERY → SUGGESTED USERS ===== */}
-          {query.trim().length === 0 && (
-            <section>
-              <p className="text-xs font-bold uppercase text-[#92adc9] mb-3">
-                Suggested Users
-              </p>
+          {/* ===== MAIN RESULTS ===== */}
+          <section className="lg:col-span-2 space-y-4">
 
-              <div className="space-y-3">
-                {suggestedUsers.map((u) => (
-                  <UserCard key={u.id} user={u} />
+            {/* Posts */}
+            {tab === "posts" && (
+              <AnimatePresence>
+                {posts.map((post) => (
+                  <motion.div
+                    key={post.id}
+                    initial={{ opacity: 0, y: 12 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0 }}
+                    transition={{ duration: 0.25 }}
+                    onClick={() => router.push(`/post/${post.slug}`)}
+                    className="flex gap-4 p-4 bg-[#111827] rounded-xl border border-slate-800 hover:border-blue-500/40 cursor-pointer transition"
+                  >
+                    {/* Thumbnail */}
+                    <div className="relative w-28 h-20 rounded-lg overflow-hidden bg-slate-800 shrink-0">
+                      {post.image_url ? (
+                        <Image
+                          src={post.image_url}
+                          alt={post.title}
+                          fill
+                          className="object-cover"
+                        />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center text-xs text-slate-500">
+                          No Image
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Content */}
+                    <div className="flex-1">
+                      <p className="font-bold leading-snug">
+                        {post.title}
+                      </p>
+
+                      <div className="flex gap-2 mt-2 flex-wrap">
+                        {post.tags.map((t) => (
+                          <span
+                            key={t}
+                            className="text-[10px] px-2 py-0.5 rounded bg-blue-500/10 text-blue-400 uppercase"
+                          >
+                            #{t}
+                          </span>
+                        ))}
+                      </div>
+
+                      <div
+                        className="flex items-center gap-2 mt-3"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          router.push(`/users/${post.author.id}`);
+                        }}
+                      >
+                        <Avatar src={post.author.profile_image} />
+                        <span className="text-xs text-slate-400">
+                          @{post.author.username}
+                        </span>
+                      </div>
+                    </div>
+                  </motion.div>
                 ))}
-              </div>
-            </section>
-          )}
+              </AnimatePresence>
+            )}
 
-          {loading && (
-            <div className="space-y-3">
-              {Array.from({ length: 4 }).map((_, i) => (
-                <div
-                  key={i}
-                  className="h-16 rounded-xl bg-[#192633] animate-pulse"
-                />
-              ))}
-            </div>
-          )}
+            {/* Users */}
+            {tab === "users" && users.map((u) => (
+              <UserRow
+                key={u.id}
+                user={u}
+                onClick={() => router.push(`/users/${u.id}`)}
+              />
+            ))}
+          </section>
 
-          {!loading &&
-            tab === "posts" &&
-            posts.map((p) => (
-              <div
-                key={p.id}
-                onClick={() => router.push(`/post/${p.slug}`)}
-                className="cursor-pointer bg-[#192633] rounded-xl p-4 border border-slate-800 hover:border-primary/40 transition"
-              >
-                <p className="text-white font-bold">{p.title}</p>
-                <p className="text-sm text-[#92adc9] line-clamp-2 mt-1">
-                  {p.content}
+          {/* ===== SUGGESTED USERS (DESKTOP SIDEBAR) ===== */}
+          <aside className="hidden lg:block">
+            {!query && (
+              <div className="bg-[#111827] rounded-xl border border-slate-800 p-4">
+                <p className="text-xs font-bold tracking-widest uppercase text-slate-400 mb-4">
+                  Suggested Users
                 </p>
 
-                {p.tags && (
-                  <div className="flex gap-2 mt-2">
-                    {p.tags.map((t) => (
-                      <span key={t} className="text-xs font-bold text-primary">
-                        #{t}
-                      </span>
-                    ))}
-                  </div>
-                )}
+                <div className="space-y-3">
+                  {suggested.map((u) => (
+                    <UserRow
+                      key={u.id}
+                      user={u}
+                      compact
+                      onClick={() => router.push(`/users/${u.id}`)}
+                    />
+                  ))}
+                </div>
               </div>
-            ))}
-
-          {!loading &&
-            tab === "users" &&
-            users.map((u) => <UserCard key={u.id} user={u} />)}
-
-          {!loading && query.trim().length >= 2 && tab === "posts" && posts.length === 0 && (
-            <Empty label="No posts found" />
-          )}
-
-          {!loading && query.trim().length >= 2 && tab === "users" && users.length === 0 && (
-            <Empty label="No users found" />
-          )}
+            )}
+          </aside>
         </div>
       </div>
     </main>
   );
 }
 
+/* ================= COMPONENTS ================= */
 
 function Tab({
-  label,
+  children,
   active,
   onClick,
 }: {
-  label: string;
+  children: string;
   active: boolean;
   onClick: () => void;
 }) {
   return (
     <button
       onClick={onClick}
-      className={`flex-1 py-3 text-sm font-bold transition
-        ${active ? "text-primary border-b-2 border-primary" : "text-[#92adc9]"}`}
+      className={`flex-1 py-3 text-sm font-bold transition ${
+        active
+          ? "border-b-2 border-blue-500 text-blue-500"
+          : "text-slate-400"
+      }`}
     >
-      {label}
+      {children}
     </button>
   );
 }
 
-function UserCard({ user }: { user: User }) {
-  const router = useRouter();
-
+function Avatar({ src }: { src?: string }) {
   return (
     <div
-      onClick={() => router.push(`/users/${user.id}`)} // Mongo _id
-      className="cursor-pointer flex items-center gap-4 p-3 rounded-xl bg-[#192633] border border-slate-800 hover:border-primary/40 transition"
-    >
-      <img
-        src={
-          user.profile_image ||
-          `https://api.dicebear.com/7.x/initials/svg?seed=${user.username}`
-        }
-        className="w-12 h-12 rounded-full border border-slate-700"
-        alt={user.username}
-      />
-
-      <div className="flex-1 min-w-0">
-        <p className="text-white font-bold truncate">@{user.username}</p>
-        <p className="text-xs text-[#92adc9]">Developer</p>
-      </div>
-    </div>
+      className="w-7 h-7 rounded-full bg-cover bg-center border border-slate-700"
+      style={{
+        backgroundImage: `url(${
+          src || "https://api.dicebear.com/7.x/initials/svg?seed=user"
+        })`,
+      }}
+    />
   );
 }
 
-function Empty({ label }: { label: string }) {
+function UserRow({
+  user,
+  onClick,
+  compact,
+}: {
+  user: User;
+  onClick: () => void;
+  compact?: boolean;
+}) {
   return (
-    <div className="text-center text-sm text-[#92adc9] py-10">
-      {label}
-    </div>
+    <motion.div
+      whileHover={{ scale: 1.02 }}
+      onClick={onClick}
+      className={`flex items-center gap-3 p-3 rounded-xl bg-[#111827] border border-slate-800 hover:border-blue-500/40 cursor-pointer ${
+        compact ? "" : "mt-3"
+      }`}
+    >
+      <Avatar src={user.profile_image} />
+      <div className="min-w-0">
+        <p className="font-bold text-sm truncate">@{user.username}</p>
+        <p className="text-xs text-slate-400 truncate">Developer</p>
+      </div>
+    </motion.div>
   );
 }
