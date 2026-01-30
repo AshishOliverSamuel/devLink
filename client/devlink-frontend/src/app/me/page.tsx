@@ -25,6 +25,7 @@ import {
   Legend,
 } from "chart.js";
 import { Line, Bar } from "react-chartjs-2";
+import AppFooter from "@/components/ui/AppFooter";
 
 ChartJS.register(
   CategoryScale,
@@ -453,6 +454,8 @@ function EditorModal({
           Update Post
         </button>
       </motion.div>
+
+      <AppFooter />
     </motion.div>
   );
 }

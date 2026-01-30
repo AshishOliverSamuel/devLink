@@ -4,19 +4,16 @@ import { useEffect, useState } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { apiFetch } from "@/lib/api";
+import AppFooter from "@/components/ui/AppFooter";
 import {
   FiBell,
-  FiHome,
-  FiMessageCircle,
-  FiPlus,
-  FiCompass,
-  FiUser,
-  FiEye,
   FiSearch,
   FiCode,
   FiLogOut,
+  FiEye,
 } from "react-icons/fi";
 
+/* ================= TYPES ================= */
 
 type Author = {
   id: string;
@@ -41,13 +38,15 @@ type User = {
   profile_image?: string;
 };
 
-
-const formatViews = (v: number) =>
-  v >= 1000 ? `${(v / 1000).toFixed(1)}k` : v.toString();
+/* ================= HELPERS ================= */
 
 const excerpt = (t: string, l = 90) =>
   t.length > l ? t.slice(0, l) + "…" : t;
 
+const formatViews = (v: number) =>
+  v >= 1000 ? `${(v / 1000).toFixed(1)}k` : v.toString();
+
+/* ================= PAGE ================= */
 
 export default function DashboardPage() {
   const router = useRouter();
@@ -56,17 +55,55 @@ export default function DashboardPage() {
   const [posts, setPosts] = useState<Post[]>([]);
   const [loading, setLoading] = useState(true);
 
+  /* 🔍 Search state */
+  const [search, setSearch] = useState("");
+  const [searchPosts, setSearchPosts] = useState<Post[]>([]);
+  const [searchUsers, setSearchUsers] = useState<User[]>([]);
+  const [showSearch, setShowSearch] = useState(false);
+
+  /* ================= AUTH ================= */
+
   useEffect(() => {
     apiFetch("/auth/me")
       .then(setUser)
       .catch(() => router.replace("/login"));
   }, [router]);
 
+  /* ================= TRENDING POSTS ================= */
+
   useEffect(() => {
     apiFetch("/posts/trending")
       .then((res) => setPosts(res.posts || []))
       .finally(() => setLoading(false));
   }, []);
+
+  /* ================= SEARCH DROPDOWN ================= */
+
+  useEffect(() => {
+    if (search.trim().length < 2) {
+      setShowSearch(false);
+      return;
+    }
+
+    const t = setTimeout(async () => {
+      try {
+        const [pRes, uRes] = await Promise.all([
+          apiFetch(`/posts/tags?t=${search}`),
+          apiFetch(`/search/users?q=${search}`),
+        ]);
+
+        setSearchPosts((pRes.posts || []).slice(0, 2));
+        setSearchUsers((uRes.users || []).slice(0, 2));
+        setShowSearch(true);
+      } catch {
+        setShowSearch(false);
+      }
+    }, 300);
+
+    return () => clearTimeout(t);
+  }, [search]);
+
+  /* ================= LOGOUT ================= */
 
   const logout = async () => {
     await apiFetch("/auth/logout", { method: "POST" });
@@ -83,9 +120,10 @@ export default function DashboardPage() {
 
   return (
     <main className="min-h-screen bg-[#101922] flex justify-center">
-      <div className="w-full max-w-6xl px-2 lg:px-6 pb-28">
+      <div className="w-full max-w-6xl px-2 lg:px-6 pb-32">
 
-        <div className="sticky top-0 z-50 bg-[#101922]/80 backdrop-blur">
+        {/* ================= HEADER ================= */}
+        <div className="sticky top-0 z-50 bg-[#101922]/90 backdrop-blur">
           <div className="flex items-center justify-between p-4">
 
             <div className="flex items-start gap-3">
@@ -93,48 +131,89 @@ export default function DashboardPage() {
                 <FiCode className="text-primary" size={18} />
               </div>
 
-              <div className="leading-tight">
+              <div>
                 <p className="text-white font-semibold text-sm">DevLink</p>
-
-                <div className="flex items-center gap-2 text-xs text-[#92adc9] mt-3">
-                  <img
-                    src={
-                      user.profile_image ||
-                      "https://api.dicebear.com/7.x/initials/svg?seed=ayush_dev"
-                    }
-                    alt="user"
-                    className="w-[18px] h-[18px] rounded-full"
-                  />
+                <p className="text-xs text-[#92adc9] mt-1">
                   @{user.username}
-                </div>
+                </p>
               </div>
             </div>
 
             <div className="flex items-center gap-2">
-              <button className="h-10 w-10 rounded-full flex items-center justify-center hover:bg-slate-800">
+              <button className="h-10 w-10 rounded-full hover:bg-slate-800 flex items-center justify-center">
                 <FiBell />
               </button>
               <button
                 onClick={logout}
-                className="h-10 w-10 rounded-full flex items-center justify-center text-primary hover:bg-slate-800"
+                className="h-10 w-10 rounded-full hover:bg-slate-800 flex items-center justify-center text-primary"
               >
                 <FiLogOut />
               </button>
             </div>
           </div>
 
-          <div className="px-4 pb-4">
+          {/* ================= SEARCH BAR ================= */}
+          <div className="px-4 pb-4 relative">
             <div className="flex items-center gap-2 bg-[#233648] h-11 rounded-xl px-4">
               <FiSearch className="text-[#92adc9]" />
               <input
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
                 placeholder="Search posts, developers, or tags"
                 className="bg-transparent outline-none text-sm w-full text-white placeholder-[#92adc9]"
-                
               />
             </div>
+
+            {/* 🔽 SEARCH DROPDOWN */}
+            {showSearch && (
+              <div className="absolute top-14 left-4 right-4 bg-[#192633] border border-slate-800 rounded-xl shadow-xl overflow-hidden z-50">
+
+                {/* POSTS */}
+                {searchPosts.map((p) => (
+                  <div
+                    key={p.id}
+                    onClick={() => router.push(`/post/${p.slug}`)}
+                    className="px-4 py-3 hover:bg-slate-800 cursor-pointer border-b border-slate-800"
+                  >
+                    <p className="text-sm font-bold truncate">{p.title}</p>
+                    <p className="text-xs text-[#92adc9]">
+                      by @{p.author.username}
+                    </p>
+                  </div>
+                ))}
+
+                {/* USERS */}
+                {searchUsers.map((u) => (
+                  <div
+                    key={u.id}
+                    onClick={() => router.push(`/users/${u.id}`)}
+                    className="px-4 py-3 hover:bg-slate-800 cursor-pointer border-b border-slate-800 flex items-center gap-3"
+                  >
+                    <img
+                      src={
+                        u.profile_image ||
+                        `https://api.dicebear.com/7.x/initials/svg?seed=${u.username}`
+                      }
+                      className="w-6 h-6 rounded-full"
+                    />
+                    <span className="text-sm font-semibold">
+                      @{u.username}
+                    </span>
+                  </div>
+                ))}
+
+                <button
+                  onClick={() => router.push(`/search?q=${search}`)}
+                  className="w-full py-3 text-primary text-sm font-bold hover:bg-slate-800"
+                >
+                  View all results
+                </button>
+              </div>
+            )}
           </div>
         </div>
 
+        {/* ================= POSTS GRID ================= */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 p-2">
           {loading &&
             Array.from({ length: 4 }).map((_, i) => (
@@ -149,7 +228,7 @@ export default function DashboardPage() {
               <div
                 key={post.id}
                 onClick={() => router.push(`/post/${post.slug}`)}
-                className="cursor-pointer rounded-xl bg-[#192633] border border-slate-800 overflow-hidden hover:border-primary/40 transition"
+                className="cursor-pointer rounded-xl bg-[#192633] border border-slate-800 hover:border-primary/40 transition overflow-hidden"
               >
                 {post.image_url && (
                   <div className="relative aspect-video">
@@ -163,22 +242,7 @@ export default function DashboardPage() {
                 )}
 
                 <div className="p-4 space-y-2">
-                  {post.tags && (
-                    <div className="flex gap-2">
-                      {post.tags.map((t) => (
-                        <span
-                          key={t}
-                          className="text-xs font-bold text-primary"
-                        >
-                          #{t}
-                        </span>
-                      ))}
-                    </div>
-                  )}
-
-                  <p className="text-lg font-bold text-white">
-                    {post.title}
-                  </p>
+                  <p className="text-lg font-bold">{post.title}</p>
 
                   <p className="text-sm text-[#92adc9] line-clamp-2">
                     {excerpt(post.content)}
@@ -186,23 +250,20 @@ export default function DashboardPage() {
 
                   <div className="flex items-center justify-between pt-3 border-t border-slate-800 text-xs text-[#92adc9]">
                     <div
-                      className="flex items-center gap-3 cursor-pointer hover:text-primary transition"
                       onClick={(e) => {
                         e.stopPropagation();
                         router.push(`/users/${post.author.id}`);
                       }}
+                      className="flex items-center gap-3 hover:text-primary cursor-pointer"
                     >
                       <img
                         src={
                           post.author.profile_image ||
                           `https://api.dicebear.com/7.x/initials/svg?seed=${post.author.username}`
                         }
-                        alt={post.author.username}
                         className="w-8 h-8 rounded-full border border-slate-700"
                       />
-                      <span className="text-sm font-semibold">
-                        @{post.author.username}
-                      </span>
+                      @{post.author.username}
                     </div>
 
                     <div className="flex items-center gap-1">
@@ -215,44 +276,8 @@ export default function DashboardPage() {
             ))}
         </div>
 
-        <div className="fixed bottom-0 left-0 right-0 bg-[#101922]/95 border-t border-slate-800 backdrop-blur px-6 pt-3 pb-8 flex justify-between max-w-6xl mx-auto">
-          <Nav icon={<FiHome />} label="Feed" active />
-          <Nav icon={<FiMessageCircle />} label="Chat" />
-
-          <button className="-top-6 relative w-14 h-14 rounded-full mt-4 text-white flex items-center justify-center shadow-lg shadow-primary/30 bg-blue-500">
-            <FiPlus size={24} />
-          </button>
-
-          <Nav icon={<FiCompass />} label="Discover" />
-          <Nav  icon={<FiUser />} label="Profile"   onClick={() => router.push("/me")}
- />
-        </div>
+        <AppFooter />
       </div>
     </main>
-  );
-}
-
-
-function Nav({
-  icon,
-  label,
-  active,
-  onClick,
-}: {
-  icon: React.ReactNode;
-  label: string;
-  active?: boolean;
-  onClick?: () => void;
-}) {
-  return (
-    <button
-      onClick={onClick}
-      className={`flex flex-col items-center gap-1 font-bold
-        text-[10px] lg:text-[12px] hover:text-blue-500
-        ${active ? "text-primary" : "text-slate-400"}`}
-    >
-      <div className="text-base lg:text-lg">{icon}</div>
-      {label}
-    </button>
   );
 }

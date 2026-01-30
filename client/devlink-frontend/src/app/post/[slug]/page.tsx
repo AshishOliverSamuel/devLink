@@ -8,6 +8,7 @@ import toast from "react-hot-toast";
 import { apiFetch } from "@/lib/api";
 import { FiArrowLeft, FiShare2 } from "react-icons/fi";
 import { Card, CardContent } from "@/components/ui/card";
+import AppFooter from "@/components/ui/AppFooter";
 
 type Post = {
   id: string;

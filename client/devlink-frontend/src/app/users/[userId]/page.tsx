@@ -6,6 +6,7 @@ import Image from "next/image";
 import { apiFetch } from "@/lib/api";
 import { FiMessageCircle } from "react-icons/fi";
 import { motion } from "framer-motion";
+import AppFooter from "@/components/ui/AppFooter";
 
 
 type User = {

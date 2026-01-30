@@ -1,11 +1,14 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import Image from "next/image";
 import { motion, AnimatePresence } from "framer-motion";
 import { ArrowLeft, Search, Filter } from "lucide-react";
 import { apiFetch } from "@/lib/api";
+import AppFooter from "@/components/ui/AppFooter";
+
+/* ================= TYPES ================= */
 
 type User = {
   id: string;
@@ -27,15 +30,28 @@ type Post = {
   };
 };
 
+/* ================= PAGE ================= */
+
 export default function SearchPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
 
-  const [query, setQuery] = useState("");
+  /* 🔑 URL is source of truth */
+  const urlQuery = searchParams.get("q") || "";
+
+  const [query, setQuery] = useState(urlQuery);
   const [tab, setTab] = useState<"posts" | "users">("posts");
+
   const [posts, setPosts] = useState<Post[]>([]);
   const [users, setUsers] = useState<User[]>([]);
   const [suggested, setSuggested] = useState<User[]>([]);
   const [loading, setLoading] = useState(false);
+
+  /* ================= SYNC URL → INPUT ================= */
+
+  useEffect(() => {
+    setQuery(urlQuery);
+  }, [urlQuery]);
 
   /* ================= Suggested Users ================= */
 
@@ -46,7 +62,7 @@ export default function SearchPage() {
     }
   }, [query]);
 
-  /* ================= Search ================= */
+  /* ================= SEARCH ================= */
 
   useEffect(() => {
     if (query.trim().length < 2) {
@@ -56,6 +72,7 @@ export default function SearchPage() {
     }
 
     setLoading(true);
+
     const timer = setTimeout(async () => {
       try {
         if (tab === "posts") {
@@ -74,8 +91,8 @@ export default function SearchPage() {
   }, [query, tab]);
 
   return (
-    <main className="min-h-screen bg-[#0f172a] text-white">
-      <div className="max-w-5xl mx-auto px-4 pb-24">
+    <main className="min-h-screen bg-[#0f172a] text-white pb-32">
+      <div className="max-w-5xl mx-auto px-4">
 
         {/* ================= HEADER ================= */}
         <header className="sticky top-0 z-40 bg-[#0f172a]/90 backdrop-blur">
@@ -88,7 +105,6 @@ export default function SearchPage() {
             </button>
 
             <h1 className="text-xl font-bold flex-1">Search</h1>
-
             <Filter className="text-blue-400" />
           </div>
 
@@ -97,7 +113,11 @@ export default function SearchPage() {
             <Search className="text-slate-400" size={18} />
             <input
               value={query}
-              onChange={(e) => setQuery(e.target.value)}
+              onChange={(e) => {
+                const val = e.target.value;
+                setQuery(val);
+                router.replace(`/search?q=${encodeURIComponent(val)}`);
+              }}
               placeholder="Search posts, users or tags"
               className="bg-transparent outline-none w-full ml-3 text-sm placeholder-slate-400"
             />
@@ -119,6 +139,10 @@ export default function SearchPage() {
 
           {/* ===== MAIN RESULTS ===== */}
           <section className="lg:col-span-2 space-y-4">
+
+            {loading && (
+              <p className="text-slate-400 text-sm">Searching…</p>
+            )}
 
             {/* Posts */}
             {tab === "posts" && (
@@ -185,16 +209,17 @@ export default function SearchPage() {
             )}
 
             {/* Users */}
-            {tab === "users" && users.map((u) => (
-              <UserRow
-                key={u.id}
-                user={u}
-                onClick={() => router.push(`/users/${u.id}`)}
-              />
-            ))}
+            {tab === "users" &&
+              users.map((u) => (
+                <UserRow
+                  key={u.id}
+                  user={u}
+                  onClick={() => router.push(`/users/${u.id}`)}
+                />
+              ))}
           </section>
 
-          {/* ===== SUGGESTED USERS (DESKTOP SIDEBAR) ===== */}
+          {/* ===== SUGGESTED USERS (DESKTOP) ===== */}
           <aside className="hidden lg:block">
             {!query && (
               <div className="bg-[#111827] rounded-xl border border-slate-800 p-4">
@@ -217,6 +242,8 @@ export default function SearchPage() {
           </aside>
         </div>
       </div>
+
+      <AppFooter />
     </main>
   );
 }
