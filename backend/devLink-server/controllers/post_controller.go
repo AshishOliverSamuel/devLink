@@ -469,3 +469,73 @@ func GetMyPosts(client *mongo.Client) gin.HandlerFunc {
 		})
 	}
 }
+
+
+func SearchPost(client *mongo.Client) gin.HandlerFunc {
+	return func(c *gin.Context) {
+
+		query := strings.TrimSpace(c.Query("t"))
+		if len(query) < 2 {
+			c.JSON(http.StatusBadRequest, gin.H{
+				"error": "Search query missing",
+			})
+			return
+		}
+
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+
+		postCol := database.OpenCollection("posts", client)
+		userCol := database.OpenCollection("users", client)
+
+		filter := bson.M{
+			"tags": bson.M{
+				"$regex":   query,
+				"$options": "i",
+			},
+			"published": true,
+		}
+
+		cursor, err := postCol.Find(ctx, filter)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"error": "Search failed",
+			})
+			return
+		}
+		defer cursor.Close(ctx)
+
+		var posts []models.Post
+		if err := cursor.All(ctx, &posts); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"error": "Failed to parse posts",
+			})
+			return
+		}
+
+		var response []PostResponse
+
+		for _, post := range posts {
+			var user models.User
+			if err := userCol.FindOne(
+				ctx,
+				bson.M{"_id": post.AuthorID},
+			).Decode(&user); err != nil {
+				continue
+			}
+
+			response = append(response, PostResponse{
+				Post: post,
+				Author: PostAuthor{
+					ID:           user.Id,
+					Username:     user.UserName,
+					ProfileImage: user.ProfileImage,
+				},
+			})
+		}
+
+		c.JSON(http.StatusOK, gin.H{
+			"posts": response,
+		})
+	}
+}
