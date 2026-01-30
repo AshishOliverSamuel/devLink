@@ -41,7 +41,6 @@ type User = {
   profile_image?: string;
 };
 
-/* ================= HELPERS ================= */
 
 const formatViews = (v: number) =>
   v >= 1000 ? `${(v / 1000).toFixed(1)}k` : v.toString();
@@ -49,7 +48,6 @@ const formatViews = (v: number) =>
 const excerpt = (t: string, l = 90) =>
   t.length > l ? t.slice(0, l) + "…" : t;
 
-/* ================= PAGE ================= */
 
 export default function DashboardPage() {
   const router = useRouter();
@@ -87,7 +85,6 @@ export default function DashboardPage() {
     <main className="min-h-screen bg-[#101922] flex justify-center">
       <div className="w-full max-w-6xl px-2 lg:px-6 pb-28">
 
-        {/* ================= HEADER ================= */}
         <div className="sticky top-0 z-50 bg-[#101922]/80 backdrop-blur">
           <div className="flex items-center justify-between p-4">
 
@@ -126,7 +123,6 @@ export default function DashboardPage() {
             </div>
           </div>
 
-          {/* SEARCH */}
           <div className="px-4 pb-4">
             <div className="flex items-center gap-2 bg-[#233648] h-11 rounded-xl px-4">
               <FiSearch className="text-[#92adc9]" />

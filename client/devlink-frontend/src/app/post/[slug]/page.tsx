@@ -93,7 +93,6 @@ export default function PostPage() {
 
   return (
     <main className="min-h-screen bg-[#020617] text-slate-100">
-      {/* HEADER */}
       <header className="sticky top-0 z-50 backdrop-blur bg-[#020617]/80 border-b border-white/5">
         <div className="max-w-4xl mx-auto px-4 py-4 flex justify-between items-center">
           <button

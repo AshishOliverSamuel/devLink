@@ -29,5 +29,6 @@ func ProtectedRoutes(router *gin.Engine,client *mongo.Client){
 	protected.POST("/chat/request/:id/respond",controllers.RespondChatRequest(client))
 	protected.GET("/chat/rooms/:room_id/messages",controllers.ChatHistory(client))
 	protected.POST("/chat/rooms/:room_id/seen",controllers.MarkSeenMsg(client))
+protected.GET("/users/suggested", controllers.GetSuggestedUsers(client))
 
 }

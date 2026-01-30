@@ -14,11 +14,7 @@ import (
 	"go.mongodb.org/mongo-driver/v2/mongo/options"
 )
 
-type SuggestedUser struct {
-	ID           string `json:"id" bson:"_id"`
-	Username     string `json:"username" bson:"username"`
-	ProfileImage string `json:"profile_image,omitempty" bson:"profile_image,omitempty"`
-}
+
 
 func GetUserProfile(client *mongo.Client )gin.HandlerFunc{
 	return func(c* gin.Context){
@@ -243,8 +239,7 @@ func GetUserProfileStats(client *mongo.Client) gin.HandlerFunc {
 func GetSuggestedUsers(client *mongo.Client) gin.HandlerFunc {
 	return func(c *gin.Context) {
 
-		currentUserId := c.GetString("userId")
-		
+		currentUser := c.GetString("userId")
 
 		limitStr := c.DefaultQuery("limit", "5")
 		limit, err := strconv.Atoi(limitStr)
@@ -257,8 +252,13 @@ func GetSuggestedUsers(client *mongo.Client) gin.HandlerFunc {
 
 		userCollection := database.OpenCollection("users", client)
 
+
 		filter := bson.M{
-			"user_id": bson.M{"$ne": currentUserId},
+			"user_id": bson.M{"$ne": currentUser},
+		}
+
+		if oid, err := bson.ObjectIDFromHex(currentUser); err == nil {
+			filter["_id"] = bson.M{"$ne": oid}
 		}
 
 		opts := options.Find().
@@ -274,8 +274,10 @@ func GetSuggestedUsers(client *mongo.Client) gin.HandlerFunc {
 		}
 		defer cursor.Close(ctx)
 
+
 		type SuggestedUser struct {
-			UserId       string `json:"id"`
+			ID           string `json:"id"`              // Mongo _id
+			UserId       string `json:"user_id"`         // public id
 			UserName     string `json:"username"`
 			ProfileImage string `json:"profile_image,omitempty"`
 		}
@@ -290,7 +292,8 @@ func GetSuggestedUsers(client *mongo.Client) gin.HandlerFunc {
 			}
 
 			users = append(users, SuggestedUser{
-				UserId:       u.UserId,
+				ID:           u.Id.Hex(),   
+				UserId:       u.UserId,    
 				UserName:     u.UserName,
 				ProfileImage: u.ProfileImage,
 			})
@@ -298,7 +301,7 @@ func GetSuggestedUsers(client *mongo.Client) gin.HandlerFunc {
 
 		if err := cursor.Err(); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{
-				"error": "Error while reading users",
+				"error": "Error reading suggested users",
 			})
 			return
 		}
