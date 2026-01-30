@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/ayushmehta03/devLink-backend/database"
@@ -69,56 +70,69 @@ c.JSON(http.StatusOK, gin.H{
 		})	}
 }
 
-func SearchUsers(client *mongo.Client)gin.HandlerFunc{
-	return func(c *gin.Context){
 
-		query:=c.Query("q")
 
-		if query==""{
-			c.JSON(http.StatusBadRequest,gin.H{"error":"Query missing"})
-			return 
+func SearchUsers(client *mongo.Client) gin.HandlerFunc {
+	return func(c *gin.Context) {
+
+		query := strings.TrimSpace(c.Query("q"))
+		if len(query) < 2 {
+			c.JSON(http.StatusBadRequest, gin.H{
+				"error": "Query missing",
+			})
+			return
 		}
 
-		ctx,cancel:=context.WithTimeout(context.Background(),10*time.Second)
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
 
+		userCollection := database.OpenCollection("users", client)
 
-		userCollection:=database.OpenCollection("users",client)
-
-		filter:=bson.M{
-			"name":bson.M{
-				"$regex":query,
-				"$options":"i",
+		filter := bson.M{
+			"name": bson.M{
+				"$regex":   query,
+				"$options": "i",
 			},
 		}
 
-		cursor,err:=userCollection.Find(ctx,filter)
-
-		if err!=nil{
-			c.JSON(http.StatusInternalServerError,gin.H{"error":"Search failed"})
-			return 
+		cursor, err := userCollection.Find(ctx, filter)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"error": "Search failed",
+			})
+			return
 		}
-
 		defer cursor.Close(ctx)
 
+		type UserResponse struct {
+			ID           string `json:"id"`
+			Username     string `json:"username"`
+			Bio          string `json:"bio,omitempty"`
+			ProfileImage string `json:"profile_image,omitempty"`
+		}
 
-		var users []gin.H
+		var users []UserResponse
 
-		for cursor.Next(ctx){
+		for cursor.Next(ctx) {
 			var user models.User
-			cursor.Decode(&user)
-		
+			if err := cursor.Decode(&user); err != nil {
+				continue
+			}
 
-		users=append(users, gin.H{
-			"name":user.UserName,
-			"bio":user.Bio,
-			"profile_pic":user.ProfileImage,
+			users = append(users, UserResponse{
+				ID:           user.Id.Hex(),     
+				Username:     user.UserName,
+				Bio:          user.Bio,
+				ProfileImage: user.ProfileImage,
+			})
+		}
+
+		c.JSON(http.StatusOK, gin.H{
+			"users": users,
 		})
 	}
-
-	c.JSON(http.StatusOK,users)
-	}
 }
+
 
 
 func SearchPost(client *mongo.Client) gin.HandlerFunc{
