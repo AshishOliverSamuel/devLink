@@ -11,6 +11,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"go.mongodb.org/mongo-driver/v2/bson"
 	"go.mongodb.org/mongo-driver/v2/mongo"
+	"go.mongodb.org/mongo-driver/v2/mongo/options"
 )
 
 type SuggestedUser struct {
@@ -242,38 +243,29 @@ func GetUserProfileStats(client *mongo.Client) gin.HandlerFunc {
 func GetSuggestedUsers(client *mongo.Client) gin.HandlerFunc {
 	return func(c *gin.Context) {
 
-		userID := c.GetString("userId") 
-		limitParam := c.DefaultQuery("limit", "5")
+		currentUserId := c.GetString("userId")
+		
 
-		limit, err := strconv.Atoi(limitParam)
+		limitStr := c.DefaultQuery("limit", "5")
+		limit, err := strconv.Atoi(limitStr)
 		if err != nil || limit <= 0 {
 			limit = 5
 		}
 
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
 
-		usersCollection := client.Database("devlink").Collection("users")
+		userCollection := database.OpenCollection("users", client)
 
 		filter := bson.M{
-			"_id": bson.M{"$ne": userID},
+			"user_id": bson.M{"$ne": currentUserId},
 		}
 
-		pipeline := mongo.Pipeline{
-			{{Key: "$match", Value: filter}},
-			{{Key: "$sort", Value: bson.M{
-				"last_active": -1,
-				"created_at": -1,
-			}}},
-			{{Key: "$limit", Value: limit}},
-			{{Key: "$project", Value: bson.M{
-				"_id":           1,
-				"username":      1,
-				"profile_image": 1,
-			}}},
-		}
+		opts := options.Find().
+			SetLimit(int64(limit)).
+			SetSort(bson.M{"created_at": -1})
 
-		cursor, err := usersCollection.Aggregate(ctx, pipeline)
+		cursor, err := userCollection.Find(ctx, filter, opts)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{
 				"error": "Failed to fetch suggested users",
@@ -282,10 +274,31 @@ func GetSuggestedUsers(client *mongo.Client) gin.HandlerFunc {
 		}
 		defer cursor.Close(ctx)
 
+		type SuggestedUser struct {
+			UserId       string `json:"id"`
+			UserName     string `json:"username"`
+			ProfileImage string `json:"profile_image,omitempty"`
+		}
+
 		var users []SuggestedUser
-		if err := cursor.All(ctx, &users); err != nil {
+
+		for cursor.Next(ctx) {
+			var u models.User
+
+			if err := cursor.Decode(&u); err != nil {
+				continue
+			}
+
+			users = append(users, SuggestedUser{
+				UserId:       u.UserId,
+				UserName:     u.UserName,
+				ProfileImage: u.ProfileImage,
+			})
+		}
+
+		if err := cursor.Err(); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{
-				"error": "Failed to parse suggested users",
+				"error": "Error while reading users",
 			})
 			return
 		}
