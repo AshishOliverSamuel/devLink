@@ -95,7 +95,7 @@ export default function UserProfilePage() {
           <p className="text-2xl font-bold text-white">@{user.name}</p>
 
           <button
-            onClick={() => router.push(`/messages/request/${userId}`)}
+            onClick={() => router.push(`/chat/request/${userId}`)}
             className="flex items-center gap-2 text-sm font-semibold text-blue-400 hover:text-blue-300 transition"
           >
             <FiMessageCircle />
