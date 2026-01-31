@@ -35,12 +35,12 @@ export default function ChatsPage() {
   const [counts, setCounts] = useState({ requests: 0, unread: 0 });
   const [loading, setLoading] = useState(true);
 
-
+  /* ================= COUNTS ================= */
   useEffect(() => {
     apiFetch("/chat/counts").then(setCounts);
   }, []);
 
-
+  /* ================= DATA ================= */
   useEffect(() => {
     setLoading(true);
 
@@ -57,7 +57,6 @@ export default function ChatsPage() {
     }
   }, [tab]);
 
-
   const respond = async (id: string, action: "accept" | "reject") => {
     await apiFetch(`/chat/request/${id}/respond`, {
       method: "POST",
@@ -68,42 +67,56 @@ export default function ChatsPage() {
     setCounts((c) => ({ ...c, requests: Math.max(0, c.requests - 1) }));
   };
 
+  const totalNotifications = counts.unread + counts.requests;
+
   return (
     <main className="min-h-screen bg-[#101922] text-white flex justify-center">
       <div className="w-full max-w-xl">
 
+        {/* ================= HEADER ================= */}
         <header className="sticky top-0 z-40 bg-[#101922]/90 backdrop-blur border-b border-slate-800">
-          <div className="flex items-center justify-between p-4">
+          <div className="flex items-center justify-between p-4 relative">
             <button onClick={() => router.back()}>←</button>
+
             <h1 className="font-bold text-lg">Chats</h1>
-            <div />
+
+            {/* 🔔 GLOBAL NOTIFICATION BADGE */}
+            <div className="relative w-8 h-8">
+              <AnimatePresence>
+                {totalNotifications > 0 && (
+                  <motion.div
+                    key="badge"
+                    initial={{ scale: 0, opacity: 0 }}
+                    animate={{ scale: 1, opacity: 1 }}
+                    exit={{ scale: 0 }}
+                    className="absolute -top-1 -right-1 bg-primary text-[11px] font-bold rounded-full min-w-[18px] h-[18px] flex items-center justify-center px-1"
+                  >
+                    {totalNotifications}
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
           </div>
 
+          {/* ================= TABS ================= */}
           <div className="flex border-b border-slate-800">
-            <Tab
-              active={tab === "inbox"}
-              onClick={() => setTab("inbox")}
-              count={counts.unread}
-            >
+            <Tab active={tab === "inbox"} onClick={() => setTab("inbox")}>
               Inbox
             </Tab>
-
-            <Tab
-              active={tab === "requests"}
-              onClick={() => setTab("requests")}
-              count={counts.requests}
-            >
+            <Tab active={tab === "requests"} onClick={() => setTab("requests")}>
               Requests
             </Tab>
           </div>
         </header>
 
+        {/* ================= CONTENT ================= */}
         <div className="p-4 space-y-4">
 
           {loading && (
             <p className="text-slate-400 text-center">Loading…</p>
           )}
 
+          {/* ================= INBOX ================= */}
           <AnimatePresence>
             {!loading && tab === "inbox" && rooms.length === 0 && (
               <motion.p
@@ -135,7 +148,7 @@ export default function ChatsPage() {
                   />
 
                   <div className="flex-1 min-w-0">
-                    <div className="flex justify-between">
+                    <div className="flex justify-between items-center">
                       <p className="font-bold truncate">
                         @{r.user.username}
                       </p>
@@ -159,6 +172,7 @@ export default function ChatsPage() {
               ))}
           </AnimatePresence>
 
+          {/* ================= REQUESTS ================= */}
           <AnimatePresence>
             {!loading && tab === "requests" && requests.length === 0 && (
               <motion.p
@@ -202,13 +216,13 @@ export default function ChatsPage() {
                   <div className="flex gap-3 mt-4">
                     <button
                       onClick={() => respond(r.id, "reject")}
-                      className="flex-1 h-10 rounded-lg bg-slate-700 hover:bg-slate-600"
+                      className="flex-1 h-10 rounded-lg bg-slate-700 hover:bg-slate-600 transition"
                     >
                       Decline
                     </button>
                     <button
                       onClick={() => respond(r.id, "accept")}
-                      className="flex-1 h-10 rounded-lg bg-primary hover:bg-primary/90"
+                      className="flex-1 h-10 rounded-lg bg-primary hover:bg-primary/90 transition"
                     >
                       Accept
                     </button>
@@ -222,38 +236,25 @@ export default function ChatsPage() {
   );
 }
 
-
 function Tab({
   children,
   active,
   onClick,
-  count,
 }: {
   children: string;
   active: boolean;
   onClick: () => void;
-  count?: number;
 }) {
   return (
     <button
       onClick={onClick}
-      className={`flex-1 py-3 text-sm font-bold relative transition ${
+      className={`flex-1 py-3 text-sm font-bold transition ${
         active
           ? "border-b-2 border-primary text-primary"
-          : "text-slate-400"
+          : "text-slate-400 hover:text-slate-200"
       }`}
     >
       {children}
-
-      {count && count > 0 && (
-        <motion.span
-          initial={{ scale: 0 }}
-          animate={{ scale: 1 }}
-          className="absolute top-2 right-6 bg-primary text-[10px] px-1.5 py-0.5 rounded-full"
-        >
-          {count}
-        </motion.span>
-      )}
     </button>
   );
 }

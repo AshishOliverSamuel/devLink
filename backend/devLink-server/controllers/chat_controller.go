@@ -460,7 +460,7 @@ func GetChatCounts(client *mongo.Client) gin.HandlerFunc {
 		defer cancel()
 
 		chatReqCol := database.OpenCollection("chat_requests", client)
-		chatRoomCol := database.OpenCollection("chatrooms", client)
+		chatRoomCol := database.OpenCollection("chat_rooms", client)
 		messageCol := database.OpenCollection("messages", client)
 
 
@@ -507,3 +507,64 @@ func GetChatCounts(client *mongo.Client) gin.HandlerFunc {
 		})
 	}
 }
+func GetChatRooms(client *mongo.Client) gin.HandlerFunc {
+	return func(c *gin.Context) {
+
+		userId, ok := c.Get("user_id")
+		if !ok {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+			return
+		}
+
+		uid, _ := bson.ObjectIDFromHex(userId.(string))
+
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+
+		roomCol := database.OpenCollection("chat_rooms", client)
+		msgCol := database.OpenCollection("messages", client)
+
+		cursor, err := roomCol.Find(ctx, bson.M{
+			"participants": uid,
+		})
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch rooms"})
+			return
+		}
+		defer cursor.Close(ctx)
+
+		var rooms []gin.H
+
+		for cursor.Next(ctx) {
+			var room models.ChatRoom
+			if err := cursor.Decode(&room); err != nil {
+				continue
+			}
+
+			var other bson.ObjectID
+			for _, p := range room.Participants {
+				if p != uid {
+					other = p
+				}
+			}
+
+			var lastMsg models.Message
+			_ = msgCol.FindOne(
+				ctx,
+				bson.M{"room_id": room.ID},
+				options.FindOne().SetSort(bson.M{"created_at": -1}),
+			).Decode(&lastMsg)
+
+			rooms = append(rooms, gin.H{
+				"room_id": room.ID.Hex(),
+				"user_id": other.Hex(),
+				"last_message": lastMsg.Content,
+				"updated_at": room.CreatedAt,
+				"unread": 0, 
+			})
+		}
+
+		c.JSON(http.StatusOK, gin.H{"rooms": rooms})
+	}
+}
+

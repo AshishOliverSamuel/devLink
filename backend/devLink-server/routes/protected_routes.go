@@ -31,5 +31,6 @@ func ProtectedRoutes(router *gin.Engine,client *mongo.Client){
 	protected.POST("/chat/rooms/:room_id/seen",controllers.MarkSeenMsg(client))
 protected.GET("/users/suggested", controllers.GetSuggestedUsers(client))
 protected.GET("/chat/request/status/:userId",controllers.GetChatRequestStatus(client))
+protected.GET("/chat/counts",controllers.GetChatCounts(client))
 
 }
