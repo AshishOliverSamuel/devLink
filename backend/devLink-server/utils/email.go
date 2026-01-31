@@ -20,7 +20,6 @@ func SendOTPEmail(toEmail string, otp string) error {
 
 	subject := "DevLink • Verify your email"
 
-	// ---------- HTML EMAIL BODY ----------
 	body := fmt.Sprintf(`
 <!DOCTYPE html>
 <html>

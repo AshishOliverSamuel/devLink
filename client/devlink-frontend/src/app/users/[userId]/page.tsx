@@ -6,7 +6,6 @@ import Image from "next/image";
 import { apiFetch } from "@/lib/api";
 import { FiMessageCircle, FiClock } from "react-icons/fi";
 import { motion } from "framer-motion";
-import AppFooter from "@/components/ui/AppFooter";
 
 type User = {
   name: string;
@@ -30,7 +29,17 @@ type Stats = {
 type ChatStatus =
   | { status: "none" }
   | { status: "pending"; type: "sent" | "received" }
-  | { status: "accepted"; room_id: string };
+  | { status: "accepted"; room_id?: string };
+
+const formatDate = (d: string) =>
+  new Date(d).toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
+
+const readTime = (t: string) =>
+  `${Math.max(1, Math.ceil(t.split(" ").length / 200))} min read`;
 
 export default function UserProfilePage() {
   const params = useParams();
@@ -43,16 +52,21 @@ export default function UserProfilePage() {
     total_posts: 0,
     total_views: 0,
   });
+
   const [chatStatus, setChatStatus] = useState<ChatStatus | null>(null);
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!userId) return;
 
     Promise.all([
+      apiFetch("/auth/me").catch(() => null),
       apiFetch(`/users/${userId}`),
       apiFetch(`/users/${userId}/stats`),
       apiFetch(`/chat/request/status/${userId}`),
-    ]).then(([profile, stats, status]) => {
+    ]).then(([me, profile, stats, status]) => {
+      setCurrentUserId(me?.user?.id ?? null);
+
       setUser(profile.user);
       setPosts(profile.posts || []);
       setStats(stats);
@@ -68,11 +82,19 @@ export default function UserProfilePage() {
     );
   }
 
+  const isOwnProfile = currentUserId === userId;
+
   const renderChatCTA = () => {
+    if (isOwnProfile) return null;
+
     if (chatStatus.status === "accepted") {
       return (
         <button
-          onClick={() => router.push(`/chats/${chatStatus.room_id}`)}
+          onClick={() =>
+            chatStatus.room_id
+              ? router.push(`/chat/${chatStatus.room_id}`)
+              : router.push("/chat")
+          }
           className="flex items-center gap-2 text-sm font-semibold text-green-400 hover:text-green-300 transition"
         >
           <FiMessageCircle />
@@ -128,9 +150,12 @@ export default function UserProfilePage() {
             <motion.div
               initial={{ opacity: 0, y: 12 }}
               animate={{ opacity: 1, y: 0 }}
-              className="mt-3 max-w-xl w-full rounded-xl border border-blue-500/20 bg-blue-500/10 px-4 py-3"
+              transition={{ duration: 0.4, ease: "easeOut" }}
+              className="mt-3 max-w-xl w-full rounded-xl border border-blue-500/20 bg-blue-500/10 px-4 py-3 shadow-sm shadow-blue-500/10"
             >
-              <p className="text-sm text-[#92adc9]">{user.bio}</p>
+              <p className="text-sm leading-relaxed text-[#92adc9]">
+                {user.bio}
+              </p>
             </motion.div>
           )}
         </div>
@@ -143,19 +168,42 @@ export default function UserProfilePage() {
         <h2 className="text-sm font-bold text-white mb-4">Posts</h2>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          {posts.map((post) => (
+          {posts.map((post, i) => (
             <motion.div
               key={post.id}
+              initial={{ opacity: 0, y: 16 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: i * 0.05 }}
               whileHover={{ y: -4 }}
-              className="cursor-pointer rounded-xl bg-[#192633] border border-slate-800 p-4"
+              className="cursor-pointer rounded-xl overflow-hidden bg-[#192633] border border-slate-800 hover:border-blue-500/40 transition"
               onClick={() => router.push(`/post/${post.slug}`)}
             >
-              <h3 className="text-lg font-bold text-white mb-1">
-                {post.title}
-              </h3>
-              <p className="text-sm text-[#92adc9] line-clamp-2">
-                {post.content}
-              </p>
+              {post.image_url && (
+                <div className="relative h-44">
+                  <Image
+                    src={post.image_url}
+                    alt={post.title}
+                    fill
+                    className="object-cover"
+                  />
+                </div>
+              )}
+
+              <div className="p-4">
+                <h3 className="text-lg font-bold text-white mb-1">
+                  {post.title}
+                </h3>
+
+                <p className="text-sm text-[#92adc9] line-clamp-2">
+                  {post.content}
+                </p>
+
+                <div className="flex gap-2 text-xs text-slate-400 mt-3">
+                  <span>{formatDate(post.created_at)}</span>
+                  <span>•</span>
+                  <span>{readTime(post.content)}</span>
+                </div>
+              </div>
             </motion.div>
           ))}
 
@@ -168,8 +216,6 @@ export default function UserProfilePage() {
 
         <div className="h-12" />
       </div>
-
-      <AppFooter />
     </main>
   );
 }

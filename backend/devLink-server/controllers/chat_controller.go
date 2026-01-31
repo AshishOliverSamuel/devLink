@@ -387,40 +387,48 @@ func GetChatRequestStatus(client *mongo.Client) gin.HandlerFunc {
 			return
 		}
 
-		senderID, _ := bson.ObjectIDFromHex(userId.(string))
-		receiverID, err := bson.ObjectIDFromHex(c.Param("userId"))
+		currentUser, _ := bson.ObjectIDFromHex(userId.(string))
+		otherUser, err := bson.ObjectIDFromHex(c.Param("userId"))
 		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid receiver"})
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid user"})
 			return
 		}
 
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
 
-		col := database.OpenCollection("chat_requests", client)
+		reqCol := database.OpenCollection("chat_requests", client)
+		roomCol := database.OpenCollection("chat_rooms", client)
 
-		var req models.ChatRequest
-		fmt.Println("sender:", senderID)
-       fmt.Println("receiver:", receiverID)
-
-		err = col.FindOne(
-			ctx,
-			bson.M{
-				"$or": []bson.M{
-					{"sender_id": senderID, "receiver_id": receiverID},
-					{"sender_id": receiverID, "receiver_id": senderID},
-				},
+		var room models.ChatRoom
+		err = roomCol.FindOne(ctx, bson.M{
+			"participants": bson.M{
+				"$all": []bson.ObjectID{currentUser, otherUser},
 			},
-			options.FindOne().SetSort(bson.M{"created_at": -1}),
-		).Decode(&req)
+		}).Decode(&room)
 
-		if err != nil {
-			c.JSON(http.StatusOK, gin.H{"status": "none"})
+		if err == nil {
+			c.JSON(http.StatusOK, gin.H{
+				"status":  "accepted",
+				"room_id": room.ID.Hex(),
+			})
 			return
 		}
 
-		if req.Status == "pending" {
-			if req.SenderID == senderID {
+		var req models.ChatRequest
+		err = reqCol.FindOne(
+			ctx,
+			bson.M{
+				"$or": []bson.M{
+					{"sender_id": currentUser, "receiver_id": otherUser},
+					{"sender_id": otherUser, "receiver_id": currentUser},
+				},
+				"status": "pending",
+			},
+		).Decode(&req)
+
+		if err == nil {
+			if req.SenderID == currentUser {
 				c.JSON(http.StatusOK, gin.H{
 					"status": "pending",
 					"type":   "sent",
@@ -434,20 +442,11 @@ func GetChatRequestStatus(client *mongo.Client) gin.HandlerFunc {
 			return
 		}
 
-		if req.Status == "accepted" {
-			c.JSON(http.StatusOK, gin.H{"status": "accepted"})
-			return
-		}
-
-		if req.Status == "rejected" {
-			c.JSON(http.StatusOK, gin.H{"status": "rejected"})
-			return
-		}
-
 		c.JSON(http.StatusOK, gin.H{"status": "none"})
 	}
 }
 
+	
 
 func GetChatCounts(client *mongo.Client) gin.HandlerFunc {
 	return func(c *gin.Context) {

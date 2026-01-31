@@ -203,12 +203,12 @@ func VerifyOtp(client *mongo.Client) gin.HandlerFunc {
 
 		c.SetCookie(
 			"access_token",
-			token,
-			3600*24, 
-			"/",
-			"localhost",
-			true,  
-			true,  
+	token,
+	3600*24,
+	"/",
+	"localhost",
+	false,   
+	true,  
 		)
 
 		c.JSON(http.StatusOK, gin.H{
@@ -245,7 +245,6 @@ func ResendOtp(client *mongo.Client) gin.HandlerFunc {
 			return
 		}
 
-		// 🔐 Generate new OTP
 		newOtp := GenerateOTP()
 		hashedOtp, err := HashPassword(newOtp)
 		if err != nil {
