@@ -77,7 +77,6 @@ func SendChatRequest(client *mongo.Client)gin.HandlerFunc{
 			return 
 		}
 
-		//create request here 
 
 		request:=models.ChatRequest{
 			ID: bson.NewObjectID(),

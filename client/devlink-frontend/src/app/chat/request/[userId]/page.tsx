@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from "react";
 import { useRouter, useParams } from "next/navigation";
-import Image from "next/image";
 import { motion } from "framer-motion";
 import { ArrowLeft, Send, Info } from "lucide-react";
 import { apiFetch } from "@/lib/api";
@@ -72,7 +71,6 @@ export default function SendMessageRequestPage() {
     <main className="min-h-screen bg-[#101922] text-white pb-28">
       <div className="max-w-3xl mx-auto px-4">
 
-        {/* Header */}
         <header className="sticky top-0 z-40 bg-[#101922]/90 backdrop-blur border-b border-slate-800">
           <div className="flex items-center justify-between py-4">
             <button
