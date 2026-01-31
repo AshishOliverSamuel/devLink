@@ -31,10 +31,7 @@ type RawRoom = {
 type RawRequest = {
   id: string;
   sender_id: string;
-  receiver_id: string;
   msg: string;
-  status: string;
-  created_at: string;
 };
 
 type Request = RawRequest & {
@@ -52,12 +49,17 @@ export default function ChatsPage() {
   const [counts, setCounts] = useState({ requests: 0, unread: 0 });
   const [loading, setLoading] = useState(true);
 
-  /* ================= COUNTS ================= */
+  /* ================= COUNTS (WITH FIX) ================= */
 
   const loadCounts = () => {
     apiFetch("/chat/counts")
-      .then((res) => setCounts(res || { requests: 0, unread: 0 }))
-      .catch(() => {});
+      .then((res) => {
+        setCounts({
+          requests: res?.requests ?? 0,
+          unread: res?.unread_messages ?? 0, // 👈 FIX
+        });
+      })
+      .catch(() => setCounts({ requests: 0, unread: 0 }));
   };
 
   useEffect(() => {
@@ -73,32 +75,26 @@ export default function ChatsPage() {
     if (tab === "inbox") {
       apiFetch("/chatrooms")
         .then(async (res) => {
-          const rawRooms: RawRoom[] = Array.isArray(res?.rooms)
-            ? res.rooms
-            : [];
+          const raw: RawRoom[] = res?.rooms || [];
 
           const hydrated = await Promise.all(
-            rawRooms.map(async (r) => {
-              try {
-                const u = await apiFetch(`/users/${r.user_id}`);
-                return {
-                  room_id: r.room_id,
-                  last_message: r.last_message,
-                  updated_at: r.updated_at,
-                  unread: r.unread,
-                  user: {
-                    id: r.user_id,
-                    username: u.user.name,
-                    profile_image: u.user.profile_image,
-                  },
-                } as ChatRoom;
-              } catch {
-                return null;
-              }
+            raw.map(async (r) => {
+              const u = await apiFetch(`/users/${r.user_id}`);
+              return {
+                room_id: r.room_id,
+                last_message: r.last_message,
+                updated_at: r.updated_at,
+                unread: r.unread,
+                user: {
+                  id: r.user_id,
+                  username: u.user.name,
+                  profile_image: u.user.profile_image,
+                },
+              };
             })
           );
 
-          setRooms(hydrated.filter(Boolean) as ChatRoom[]);
+          setRooms(hydrated);
           setLoading(false);
         })
         .catch(() => {
@@ -116,19 +112,15 @@ export default function ChatsPage() {
 
         const hydrated = await Promise.all(
           raw.map(async (r) => {
-            try {
-              const u = await apiFetch(`/users/${r.sender_id}`);
-              return {
-                ...r,
-                sender: {
-                  id: r.sender_id,
-                  username: u.user.name,
-                  profile_image: u.user.profile_image,
-                },
-              } as Request;
-            } catch {
-              return r;
-            }
+            const u = await apiFetch(`/users/${r.sender_id}`);
+            return {
+              ...r,
+              sender: {
+                id: r.sender_id,
+                username: u.user.name,
+                profile_image: u.user.profile_image,
+              },
+            };
           })
         );
 
@@ -141,7 +133,6 @@ export default function ChatsPage() {
       });
   }, [tab]);
 
-  /* ================= RESPOND ================= */
 
   const respond = async (id: string, action: "accept" | "reject") => {
     await apiFetch(`/chat/request/${id}/respond`, {
@@ -150,37 +141,45 @@ export default function ChatsPage() {
     });
 
     setRequests((prev) => prev.filter((r) => r.id !== id));
-    loadCounts();
+
+    setCounts((c) => ({
+      ...c,
+      requests: Math.max(0, c.requests - 1),
+    }));
 
     if (action === "accept") {
-      setTab("inbox"); // switch to inbox after accept
+      setTab("inbox");
     }
   };
 
-  const totalNotifications = counts.unread + counts.requests;
+  const totalNotifications = counts.requests + counts.unread;
 
-  /* ================= UI ================= */
 
   return (
     <main className="min-h-screen bg-[#101922] text-white flex justify-center">
       <div className="w-full max-w-xl">
 
-        {/* ===== HEADER ===== */}
         <header className="sticky top-0 z-40 bg-[#101922]/90 backdrop-blur border-b border-slate-800">
           <div className="flex items-center justify-between p-4">
             <button onClick={() => router.back()}>←</button>
 
             <h1 className="font-bold text-lg">Chats</h1>
 
-            {/* NOTIFICATION BADGE */}
             <div className="relative">
               <AnimatePresence>
                 {totalNotifications > 0 && (
                   <motion.div
-                    initial={{ scale: 0 }}
-                    animate={{ scale: 1 }}
-                    exit={{ scale: 0 }}
-                    className="absolute -top-2 -right-2 bg-primary text-xs font-bold rounded-full min-w-[20px] h-[20px] flex items-center justify-center px-1"
+                    key={totalNotifications}
+                    initial={{ scale: 0, opacity: 0 }}
+                    animate={{
+                      scale: [0.8, 1.15, 1],
+                      opacity: 1,
+                    }}
+                    exit={{ scale: 0, opacity: 0 }}
+                    transition={{ duration: 0.35, ease: "easeOut" }}
+                    className="absolute -top-2 -right-2 min-w-[20px] h-[20px]
+                               rounded-full bg-primary text-xs font-bold
+                               flex items-center justify-center px-1"
                   >
                     {totalNotifications}
                   </motion.div>
@@ -199,126 +198,102 @@ export default function ChatsPage() {
           </div>
         </header>
 
-        {/* ===== CONTENT ===== */}
         <div className="p-4 space-y-4">
 
           {loading && (
-            <p className="text-slate-400 text-center">Loading…</p>
+            <>
+              <Skeleton />
+              <Skeleton />
+              <Skeleton />
+            </>
           )}
 
-          {/* ===== INBOX ===== */}
-          <AnimatePresence>
-            {!loading && tab === "inbox" && rooms.length === 0 && (
-              <motion.p
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                className="text-slate-400 text-center mt-10"
-              >
-                No conversations yet
-              </motion.p>
-            )}
+          {!loading && tab === "inbox" && rooms.length === 0 && (
+            <p className="text-slate-400 text-center mt-10">
+              No conversations yet
+            </p>
+          )}
 
-            {!loading &&
-              tab === "inbox" &&
-              rooms.map((r) => (
-                <motion.div
-                  key={r.room_id}
-                  initial={{ opacity: 0, y: 8 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  whileHover={{ scale: 1.01 }}
-                  onClick={() => router.push(`/chats/${r.room_id}`)}
-                  className="cursor-pointer bg-[#192633] border border-slate-800 rounded-xl p-4 flex gap-4"
-                >
+          {!loading &&
+            tab === "inbox" &&
+            rooms.map((r) => (
+              <motion.div
+                key={r.room_id}
+                whileHover={{ scale: 1.01 }}
+                onClick={() => router.push(`/chats/${r.room_id}`)}
+                className="cursor-pointer bg-[#192633] border border-slate-800 rounded-xl p-4 flex gap-4"
+              >
+                <img
+                  src={
+                    r.user.profile_image ||
+                    `https://api.dicebear.com/7.x/initials/svg?seed=${r.user.username}`
+                  }
+                  className="w-14 h-14 rounded-full border border-slate-700 object-cover"
+                />
+
+                <div className="flex-1">
+                  <p className="font-bold">@{r.user.username}</p>
+                  <p className="text-sm text-[#92adc9] truncate">
+                    {r.last_message || "Say hello 👋"}
+                  </p>
+                </div>
+              </motion.div>
+            ))}
+
+          {!loading && tab === "requests" && requests.length === 0 && (
+            <p className="text-slate-400 text-center mt-10">
+              No pending requests
+            </p>
+          )}
+
+          {!loading &&
+            tab === "requests" &&
+            requests.map((r) => (
+              <motion.div
+                key={r.id}
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="bg-[#192633] border border-slate-800 rounded-xl p-4"
+              >
+                <div className="flex gap-4">
                   <img
+                    onClick={() => router.push(`/users/${r.sender?.id}`)}
                     src={
-                      r.user.profile_image ||
-                      `https://api.dicebear.com/7.x/initials/svg?seed=${r.user.username}`
+                      r.sender?.profile_image ||
+                      `https://api.dicebear.com/7.x/initials/svg?seed=${r.sender?.username}`
                     }
-                    className="w-14 h-14 rounded-full border border-slate-700 object-cover"
+                    className="w-14 h-14 rounded-full border border-primary/40 cursor-pointer"
                   />
 
-                  <div className="flex-1 min-w-0">
-                    <div className="flex justify-between items-center">
-                      <p className="font-bold truncate">
-                        @{r.user.username}
-                      </p>
-
-                      {r.unread > 0 && (
-                        <span className="bg-primary text-xs px-2 py-0.5 rounded-full font-bold">
-                          {r.unread}
-                        </span>
-                      )}
-                    </div>
-
-                    <p className="text-sm text-[#92adc9] truncate">
-                      {r.last_message || "Say hello 👋"}
+                  <div className="flex-1">
+                    <p
+                      onClick={() => router.push(`/users/${r.sender?.id}`)}
+                      className="font-bold cursor-pointer hover:text-primary"
+                    >
+                      @{r.sender?.username}
+                    </p>
+                    <p className="text-sm text-[#92adc9] italic">
+                      “{r.msg}”
                     </p>
                   </div>
-                </motion.div>
-              ))}
-          </AnimatePresence>
+                </div>
 
-          <AnimatePresence>
-            {!loading && tab === "requests" && requests.length === 0 && (
-              <motion.p
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                className="text-slate-400 text-center mt-10"
-              >
-                No pending requests
-              </motion.p>
-            )}
-
-            {!loading &&
-              tab === "requests" &&
-              requests.map((r) => (
-                <motion.div
-                  key={r.id}
-                  initial={{ opacity: 0, y: 8 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  className="bg-[#192633] border border-slate-800 rounded-xl p-4"
-                >
-                  <div className="flex gap-4">
-                    <img
-                      onClick={() => router.push(`/users/${r.sender?.id}`)}
-                      src={
-                        r.sender?.profile_image ||
-                        `https://api.dicebear.com/7.x/initials/svg?seed=${r.sender?.username}`
-                      }
-                      className="w-14 h-14 rounded-full border border-primary/40 object-cover cursor-pointer"
-                    />
-
-                    <div className="flex-1">
-                      <p
-                        onClick={() => router.push(`/users/${r.sender?.id}`)}
-                        className="font-bold cursor-pointer hover:text-primary"
-                      >
-                        @{r.sender?.username}
-                      </p>
-
-                      <p className="text-sm text-[#92adc9] italic">
-                        “{r.msg}”
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="flex gap-3 mt-4">
-                    <button
-                      onClick={() => respond(r.id, "reject")}
-                      className="flex-1 h-10 rounded-lg bg-slate-700 hover:bg-slate-600 transition"
-                    >
-                      Decline
-                    </button>
-                    <button
-                      onClick={() => respond(r.id, "accept")}
-                      className="flex-1 h-10 rounded-lg bg-primary hover:bg-primary/90 transition"
-                    >
-                      Accept
-                    </button>
-                  </div>
-                </motion.div>
-              ))}
-          </AnimatePresence>
+                <div className="flex gap-3 mt-4">
+                  <button
+                    onClick={() => respond(r.id, "reject")}
+                    className="flex-1 h-10 rounded-lg bg-slate-700 hover:bg-slate-600"
+                  >
+                    Decline
+                  </button>
+                  <button
+                    onClick={() => respond(r.id, "accept")}
+                    className="flex-1 h-10 rounded-lg bg-primary hover:bg-primary/90"
+                  >
+                    Accept
+                  </button>
+                </div>
+              </motion.div>
+            ))}
         </div>
       </div>
     </main>
@@ -338,7 +313,7 @@ function Tab({
   return (
     <button
       onClick={onClick}
-      className={`flex-1 py-3 text-sm font-bold transition ${
+      className={`flex-1 py-3 text-sm font-bold ${
         active
           ? "border-b-2 border-primary text-primary"
           : "text-slate-400 hover:text-slate-200"
@@ -346,5 +321,18 @@ function Tab({
     >
       {children}
     </button>
+  );
+}
+
+
+function Skeleton() {
+  return (
+    <div className="animate-pulse bg-[#192633] border border-slate-800 rounded-xl p-4 flex gap-4">
+      <div className="w-14 h-14 rounded-full bg-slate-700" />
+      <div className="flex-1 space-y-2">
+        <div className="h-4 bg-slate-700 rounded w-1/3" />
+        <div className="h-3 bg-slate-700 rounded w-2/3" />
+      </div>
+    </div>
   );
 }
