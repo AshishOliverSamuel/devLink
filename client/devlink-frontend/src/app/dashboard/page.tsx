@@ -103,7 +103,6 @@ export default function DashboardPage() {
     return () => clearTimeout(t);
   }, [search]);
 
-  /* ================= LOGOUT ================= */
 
   const logout = async () => {
     await apiFetch("/auth/logout", { method: "POST" });
@@ -122,7 +121,6 @@ export default function DashboardPage() {
     <main className="min-h-screen bg-[#101922] flex justify-center">
       <div className="w-full max-w-6xl px-2 lg:px-6 pb-32">
 
-        {/* ================= HEADER ================= */}
         <div className="sticky top-0 z-50 bg-[#101922]/90 backdrop-blur">
           <div className="flex items-center justify-between p-4">
 
@@ -152,7 +150,6 @@ export default function DashboardPage() {
             </div>
           </div>
 
-          {/* ================= SEARCH BAR ================= */}
           <div className="px-4 pb-4 relative">
             <div className="flex items-center gap-2 bg-[#233648] h-11 rounded-xl px-4">
               <FiSearch className="text-[#92adc9]" />
@@ -164,11 +161,9 @@ export default function DashboardPage() {
               />
             </div>
 
-            {/* 🔽 SEARCH DROPDOWN */}
             {showSearch && (
               <div className="absolute top-14 left-4 right-4 bg-[#192633] border border-slate-800 rounded-xl shadow-xl overflow-hidden z-50">
 
-                {/* POSTS */}
                 {searchPosts.map((p) => (
                   <div
                     key={p.id}
@@ -213,7 +208,6 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        {/* ================= POSTS GRID ================= */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 p-2">
           {loading &&
             Array.from({ length: 4 }).map((_, i) => (
