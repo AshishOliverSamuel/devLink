@@ -148,102 +148,110 @@ func ReceiveChatRequest(client *mongo.Client)gin.HandlerFunc{
 }
 
 
-func RespondChatRequest(client *mongo.Client)gin.HandlerFunc{
-	return func(c*gin.Context){
-		userId,exists:=c.Get("user_id")
+func RespondChatRequest(client *mongo.Client) gin.HandlerFunc {
+	return func(c *gin.Context) {
 
-		if !exists{
-			c.JSON(http.StatusUnauthorized,gin.H{"error":"Unauthorized"})
-			return 
+		// 🔐 Auth check
+		userId, exists := c.Get("user_id")
+		if !exists {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+			return
 		}
 
+		receiverID, _ := bson.ObjectIDFromHex(userId.(string))
 
-		requestId:=c.Param("id")
-
-		reqObjectId,err:=bson.ObjectIDFromHex(requestId)
-
-		if err!=nil{
-			c.JSON(http.StatusBadRequest,gin.H{"error":"Invalid request id"})
-			return 
+		requestId := c.Param("id")
+		reqObjectId, err := bson.ObjectIDFromHex(requestId)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request id"})
+			return
 		}
 
-		var body struct{
+		var body struct {
 			Action string `json:"action"`
 		}
 
-
-		if err:=c.ShouldBindJSON(&body);err!=nil{
-			c.JSON(http.StatusBadRequest,gin.H{"error":"Invalid action"})
-			return 
+		if err := c.ShouldBindJSON(&body); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid action"})
+			return
 		}
 
-		if body.Action!="accept" &&body.Action!="reject"{
-			c.JSON(http.StatusBadRequest,gin.H{"error":"Invalid action"})
-			return 
+		if body.Action != "accept" && body.Action != "reject" {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid action"})
+			return
 		}
 
-		ctx,cancel:=context.WithTimeout(context.Background(),10*time.Second)
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
 
-
-		reqCol:=database.OpenCollection("chat_requests",client)
-		roomCol:=database.OpenCollection("chat_rooms",client)
-
+		reqCol := database.OpenCollection("chat_requests", client)
+		roomCol := database.OpenCollection("chat_rooms", client)
 
 		var req models.ChatRequest
-
-		if err:=reqCol.FindOne(ctx,bson.M{"_id":reqObjectId}).Decode(&req);err!=nil{
-			c.JSON(http.StatusNotFound,gin.H{"error":"Chat request not found"})
-			return 
+		if err := reqCol.FindOne(ctx, bson.M{"_id": reqObjectId}).Decode(&req); err != nil {
+			c.JSON(http.StatusNotFound, gin.H{"error": "Chat request not found"})
+			return
 		}
 
-		receiverID,_:=bson.ObjectIDFromHex(userId.(string))
-
-		if req.ReceiverID!=receiverID{
-			c.JSON(http.StatusForbidden,gin.H{"error":"Not allowed"})
-			return 
+		if req.ReceiverID != receiverID {
+			c.JSON(http.StatusForbidden, gin.H{"error": "Not allowed"})
+			return
 		}
 
+		status := "rejected"
+		if body.Action == "accept" {
+			status = "accepted"
+		}
 
-		_,err=reqCol.UpdateOne(ctx,
-		bson.M{"_id":reqObjectId},
-		bson.M{"$set":bson.M{"status":body.Action}},
+		_, err = reqCol.UpdateOne(
+			ctx,
+			bson.M{"_id": reqObjectId},
+			bson.M{"$set": bson.M{"status": status}},
 		)
-
-		if err!=nil{
-			c.JSON(http.StatusInternalServerError,gin.H{"error":"Failed to respond"})
-			return 
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update request"})
+			return
 		}
 
+		if status == "accepted" {
 
-		if body.Action=="accept"{
-			room:=models.ChatRoom{
-				ID:bson.NewObjectID(),
+			var existing models.ChatRoom
+			err := roomCol.FindOne(ctx, bson.M{
+				"participants": bson.M{
+					"$all": []bson.ObjectID{req.SenderID, req.ReceiverID},
+				},
+			}).Decode(&existing)
+
+			if err == nil {
+				c.JSON(http.StatusOK, gin.H{
+					"status":  "accepted",
+					"room_id": existing.ID.Hex(),
+				})
+				return
+			}
+
+			room := models.ChatRoom{
+				ID: bson.NewObjectID(),
 				Participants: []bson.ObjectID{
 					req.SenderID,
 					req.ReceiverID,
 				},
 				CreatedAt: time.Now(),
 			}
-			_,err=roomCol.InsertOne(ctx,room)
 
-			if err!=nil{
-				c.JSON(http.StatusInternalServerError,gin.H{"error":"Failed to create room"})
-				return 
+			if _, err := roomCol.InsertOne(ctx, room); err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create room"})
+				return
 			}
 
-			c.JSON(http.StatusOK,gin.H{
-				"message":"Chat request accepted",
-				"room_id":room.ID.Hex(),
+			c.JSON(http.StatusOK, gin.H{
+				"status":  "accepted",
+				"room_id": room.ID.Hex(),
 			})
-			return 
-
+			return
 		}
 
-		c.JSON(http.StatusOK,gin.H{"message":"Chat request rejected"})
-
-
-
+		c.JSON(http.StatusOK, gin.H{"status": "rejected"})
 	}
 }
 

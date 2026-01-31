@@ -19,11 +19,17 @@ type ChatRoom = {
   unread: number;
 };
 
-type Request = {
+type RawRequest = {
   id: string;
-  sender: User & { bio?: string };
+  sender_id: string;
+  receiver_id: string;
   msg: string;
+  status: string;
   created_at: string;
+};
+
+type Request = RawRequest & {
+  sender?: User;
 };
 
 export default function ChatsPage() {
@@ -37,26 +43,69 @@ export default function ChatsPage() {
 
   /* ================= COUNTS ================= */
   useEffect(() => {
-    apiFetch("/chat/counts").then(setCounts);
+    apiFetch("/chat/counts")
+      .then((res) => setCounts(res || { requests: 0, unread: 0 }))
+      .catch(() => {});
   }, []);
 
   /* ================= DATA ================= */
   useEffect(() => {
     setLoading(true);
 
+    // 🔹 INBOX
     if (tab === "inbox") {
-      apiFetch("/chatrooms").then((res) => {
-        setRooms(res.rooms || []);
-        setLoading(false);
-      });
-    } else {
-      apiFetch("/chat/requests").then((res) => {
-        setRequests(res.requests || []);
-        setLoading(false);
-      });
+      apiFetch("/chatrooms")
+        .then((res) => {
+          const roomsData = Array.isArray(res)
+            ? res
+            : Array.isArray(res?.rooms)
+            ? res.rooms
+            : [];
+
+          setRooms(roomsData);
+          setLoading(false);
+        })
+        .catch(() => {
+          setRooms([]);
+          setLoading(false);
+        });
+
+      return;
     }
+
+    // 🔹 REQUESTS (hydrate sender info)
+    apiFetch("/chat/requests")
+      .then(async (res) => {
+        const rawRequests: RawRequest[] = Array.isArray(res) ? res : [];
+
+        const hydrated = await Promise.all(
+          rawRequests.map(async (r) => {
+            try {
+              const u = await apiFetch(`/users/${r.sender_id}`);
+              return {
+                ...r,
+                sender: {
+                  id: r.sender_id,
+                  username: u.user.name,
+                  profile_image: u.user.profile_image,
+                },
+              };
+            } catch {
+              return r;
+            }
+          })
+        );
+
+        setRequests(hydrated);
+        setLoading(false);
+      })
+      .catch(() => {
+        setRequests([]);
+        setLoading(false);
+      });
   }, [tab]);
 
+  /* ================= RESPOND ================= */
   const respond = async (id: string, action: "accept" | "reject") => {
     await apiFetch(`/chat/request/${id}/respond`, {
       method: "POST",
@@ -80,12 +129,10 @@ export default function ChatsPage() {
 
             <h1 className="font-bold text-lg">Chats</h1>
 
-            {/* 🔔 GLOBAL NOTIFICATION BADGE */}
             <div className="relative w-8 h-8">
               <AnimatePresence>
                 {totalNotifications > 0 && (
                   <motion.div
-                    key="badge"
                     initial={{ scale: 0, opacity: 0 }}
                     animate={{ scale: 1, opacity: 1 }}
                     exit={{ scale: 0 }}
@@ -98,7 +145,6 @@ export default function ChatsPage() {
             </div>
           </div>
 
-          {/* ================= TABS ================= */}
           <div className="flex border-b border-slate-800">
             <Tab active={tab === "inbox"} onClick={() => setTab("inbox")}>
               Inbox
@@ -127,49 +173,6 @@ export default function ChatsPage() {
                 No conversations yet
               </motion.p>
             )}
-
-            {!loading &&
-              tab === "inbox" &&
-              rooms.map((r) => (
-                <motion.div
-                  key={r.room_id}
-                  initial={{ opacity: 0, y: 8 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  whileHover={{ scale: 1.01 }}
-                  onClick={() => router.push(`/chats/${r.room_id}`)}
-                  className="cursor-pointer bg-[#192633] border border-slate-800 rounded-xl p-4 flex gap-4"
-                >
-                  <img
-                    src={
-                      r.user.profile_image ||
-                      `https://api.dicebear.com/7.x/initials/svg?seed=${r.user.username}`
-                    }
-                    className="w-14 h-14 rounded-full border border-slate-700"
-                  />
-
-                  <div className="flex-1 min-w-0">
-                    <div className="flex justify-between items-center">
-                      <p className="font-bold truncate">
-                        @{r.user.username}
-                      </p>
-
-                      {r.unread > 0 && (
-                        <motion.span
-                          initial={{ scale: 0 }}
-                          animate={{ scale: 1 }}
-                          className="bg-primary text-xs px-2 py-0.5 rounded-full font-bold"
-                        >
-                          {r.unread}
-                        </motion.span>
-                      )}
-                    </div>
-
-                    <p className="text-sm text-[#92adc9] truncate">
-                      {r.last_message || "Say hello 👋"}
-                    </p>
-                  </div>
-                </motion.div>
-              ))}
           </AnimatePresence>
 
           {/* ================= REQUESTS ================= */}
@@ -196,18 +199,18 @@ export default function ChatsPage() {
                   <div className="flex gap-4">
                     <img
                       src={
-                        r.sender.profile_image ||
-                        `https://api.dicebear.com/7.x/initials/svg?seed=${r.sender.username}`
+                        r.sender?.profile_image ||
+                        `https://api.dicebear.com/7.x/initials/svg?seed=${r.sender?.username || "user"}`
                       }
-                      className="w-16 h-16 rounded-full border border-primary/40"
+                      alt={r.sender?.username || "User"}
+                      className="w-14 h-14 rounded-full border border-primary/40 object-cover"
                     />
 
                     <div className="flex-1">
-                      <p className="font-bold">{r.sender.username}</p>
-                      <p className="text-xs text-primary mb-1">
-                        {r.sender.bio || "Developer"}
+                      <p className="font-bold">
+                        @{r.sender?.username || "Unknown"}
                       </p>
-                      <p className="text-sm text-[#92adc9] italic line-clamp-2">
+                      <p className="text-sm text-[#92adc9] italic">
                         “{r.msg}”
                       </p>
                     </div>
@@ -236,6 +239,7 @@ export default function ChatsPage() {
   );
 }
 
+/* ================= TAB ================= */
 function Tab({
   children,
   active,
