@@ -10,6 +10,7 @@ import (
 type ChatRequest struct{
 	ID bson.ObjectID `bson:"_id,omitempty" json:"id,omitempty"`
 	SenderID bson.ObjectID `bson:"sender_id" json:"sender_id"`
+	Msg string `bson:"msg,omitempty" json:"msg,omitempty"`
 	ReceiverID bson.ObjectID `bson:"receiver_id" json:"receiver_id"`
 	Status string `bson:"status" json:"status"`
 	CreatedAt time.Time `bson:"created_at" json:"created_at"`

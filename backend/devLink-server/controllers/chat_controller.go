@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"strings"
 
 	"time"
 
@@ -32,12 +33,17 @@ func SendChatRequest(client *mongo.Client)gin.HandlerFunc{
 
 		var body struct{
 			ReceiverID string `json:"receiver_id"`
+			Msg string `json:"msg"`
 		}
 
 		if err:=c.ShouldBindJSON(&body);err!=nil{
 			c.JSON(http.StatusBadRequest,gin.H{"error":"Invalid input"})
 			return 
 		}
+		if len(strings.TrimSpace(body.Msg)) == 0 {
+	c.JSON(http.StatusBadRequest, gin.H{"error": "Message cannot be empty"})
+	return
+}
 
 
 		receiverId,err:=bson.ObjectIDFromHex(body.ReceiverID)
@@ -76,6 +82,7 @@ func SendChatRequest(client *mongo.Client)gin.HandlerFunc{
 		request:=models.ChatRequest{
 			ID: bson.NewObjectID(),
 			SenderID: senderId,
+			Msg: body.Msg,
 			ReceiverID: receiverId,
 			Status: "pending",
 			CreatedAt: time.Now(),
