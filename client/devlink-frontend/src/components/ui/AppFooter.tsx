@@ -27,7 +27,7 @@ export default function AppFooter() {
       <Nav
         icon={<FiMessageCircle />}
         label="Chat"
-        onClick={() => router.push("/chats")}
+        onClick={() => router.push("/chat")}
       />
 
       {isDashboard && (

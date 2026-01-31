@@ -373,42 +373,137 @@ func MarkSeenMsg(clinet *mongo.Client)gin.HandlerFunc{
 func GetChatRequestStatus(client *mongo.Client) gin.HandlerFunc {
 	return func(c *gin.Context) {
 
-		userId, exists := c.Get("user_id")
-		if !exists {
+		userId, ok := c.Get("user_id")
+		if !ok {
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
 			return
 		}
 
 		senderID, _ := bson.ObjectIDFromHex(userId.(string))
-		receiverIDHex := c.Param("receiverId")
-
-		receiverID, err := bson.ObjectIDFromHex(receiverIDHex)
+		receiverID, err := bson.ObjectIDFromHex(c.Param("userId"))
 		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid receiver id"})
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid receiver"})
 			return
 		}
 
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
 
-		collection := database.OpenCollection("chat_requests", client)
+		col := database.OpenCollection("chat_requests", client)
 
 		var req models.ChatRequest
-		err = collection.FindOne(ctx, bson.M{
-			"sender_id":   senderID,
-			"receiver_id": receiverID,
-		}).Decode(&req)
+		fmt.Println("sender:", senderID)
+       fmt.Println("receiver:", receiverID)
+
+		err = col.FindOne(
+			ctx,
+			bson.M{
+				"$or": []bson.M{
+					{"sender_id": senderID, "receiver_id": receiverID},
+					{"sender_id": receiverID, "receiver_id": senderID},
+				},
+			},
+			options.FindOne().SetSort(bson.M{"created_at": -1}),
+		).Decode(&req)
 
 		if err != nil {
-			c.JSON(http.StatusOK, gin.H{
-				"status": "none",
-			})
+			c.JSON(http.StatusOK, gin.H{"status": "none"})
 			return
 		}
 
+		if req.Status == "pending" {
+			if req.SenderID == senderID {
+				c.JSON(http.StatusOK, gin.H{
+					"status": "pending",
+					"type":   "sent",
+				})
+			} else {
+				c.JSON(http.StatusOK, gin.H{
+					"status": "pending",
+					"type":   "received",
+				})
+			}
+			return
+		}
+
+		if req.Status == "accepted" {
+			c.JSON(http.StatusOK, gin.H{"status": "accepted"})
+			return
+		}
+
+		if req.Status == "rejected" {
+			c.JSON(http.StatusOK, gin.H{"status": "rejected"})
+			return
+		}
+
+		c.JSON(http.StatusOK, gin.H{"status": "none"})
+	}
+}
+
+
+func GetChatCounts(client *mongo.Client) gin.HandlerFunc {
+	return func(c *gin.Context) {
+
+		userId, ok := c.Get("user_id")
+		if !ok {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+			return
+		}
+
+		uid, err := bson.ObjectIDFromHex(userId.(string))
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid user id"})
+			return
+		}
+
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+
+		chatReqCol := database.OpenCollection("chat_requests", client)
+		chatRoomCol := database.OpenCollection("chatrooms", client)
+		messageCol := database.OpenCollection("messages", client)
+
+
+		pendingCount, _ := chatReqCol.CountDocuments(ctx, bson.M{
+			"receiver_id": uid,
+			"status":      "pending",
+		})
+
+
+		cursor, err := chatRoomCol.Find(ctx, bson.M{
+			"participants": uid,
+		})
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch chat rooms"})
+			return
+		}
+		defer cursor.Close(ctx)
+
+		var roomIDs []bson.ObjectID
+		for cursor.Next(ctx) {
+			var room struct {
+				ID bson.ObjectID `bson:"_id"`
+			}
+			if err := cursor.Decode(&room); err == nil {
+				roomIDs = append(roomIDs, room.ID)
+			}
+		}
+
+
+		unreadCount := int64(0)
+
+		if len(roomIDs) > 0 {
+			unreadCount, _ = messageCol.CountDocuments(ctx, bson.M{
+				"room_id": bson.M{"$in": roomIDs},
+				"sender_id": bson.M{"$ne": uid},
+				"seen_at": bson.M{"$exists": false},
+			})
+		}
+
+
 		c.JSON(http.StatusOK, gin.H{
-			"status": req.Status, 
-			"request_id": req.ID.Hex(),
+			"requests":        pendingCount,
+			"unread_messages": unreadCount,
 		})
 	}
 }
