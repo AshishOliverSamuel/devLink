@@ -66,7 +66,6 @@ export default function UserProfilePage() {
       apiFetch(`/chat/request/status/${userId}`),
     ]).then(([me, profile, stats, status]) => {
       setCurrentUserId(me?.user?.id ?? null);
-
       setUser(profile.user);
       setPosts(profile.posts || []);
       setStats(stats);
@@ -82,11 +81,10 @@ export default function UserProfilePage() {
     );
   }
 
-  const isOwnProfile = currentUserId === userId;
+  const isOwnProfile =
+    currentUserId !== null && currentUserId === userId;
 
   const renderChatCTA = () => {
-    if (isOwnProfile) return null;
-
     if (chatStatus.status === "accepted") {
       return (
         <button
@@ -144,7 +142,8 @@ export default function UserProfilePage() {
 
           <p className="text-2xl font-bold text-white">@{user.name}</p>
 
-          {renderChatCTA()}
+          {/* ✅ ONLY FIX IS HERE */}
+          {!isOwnProfile && renderChatCTA()}
 
           {user.bio && (
             <motion.div
