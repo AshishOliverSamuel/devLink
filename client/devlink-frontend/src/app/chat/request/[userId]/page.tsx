@@ -24,17 +24,19 @@ export default function SendMessageRequestPage() {
   const [error, setError] = useState("");
 
   useEffect(() => {
-    apiFetch(`/users/${receiverId}`)
-      .then((res) =>
-        setReceiver({
-          id: receiverId,
-          username: res.user.name,
-          bio: res.user.bio,
-          profile_image: res.user.profile_image,
-        })
-      )
-      .catch(() => setError("Failed to load user"));
-  }, [receiverId]);
+  apiFetch(`/chat/request/status/${receiverId}`)
+    .then((res) => {
+      if (res.status === "pending") {
+        router.replace(`/chat/pending/${receiverId}`);
+      }
+
+      if (res.status === "accepted") {
+        router.replace(`/chat/${receiverId}`);
+      }
+    })
+    .catch(() => {});
+}, [receiverId, router]);
+
 
   const sendRequest = async () => {
     if (loading || message.trim().length === 0) return;

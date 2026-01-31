@@ -369,3 +369,46 @@ func MarkSeenMsg(clinet *mongo.Client)gin.HandlerFunc{
 
 
 }
+
+func GetChatRequestStatus(client *mongo.Client) gin.HandlerFunc {
+	return func(c *gin.Context) {
+
+		userId, exists := c.Get("user_id")
+		if !exists {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+			return
+		}
+
+		senderID, _ := bson.ObjectIDFromHex(userId.(string))
+		receiverIDHex := c.Param("receiverId")
+
+		receiverID, err := bson.ObjectIDFromHex(receiverIDHex)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid receiver id"})
+			return
+		}
+
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+
+		collection := database.OpenCollection("chat_requests", client)
+
+		var req models.ChatRequest
+		err = collection.FindOne(ctx, bson.M{
+			"sender_id":   senderID,
+			"receiver_id": receiverID,
+		}).Decode(&req)
+
+		if err != nil {
+			c.JSON(http.StatusOK, gin.H{
+				"status": "none",
+			})
+			return
+		}
+
+		c.JSON(http.StatusOK, gin.H{
+			"status": req.Status, 
+			"request_id": req.ID.Hex(),
+		})
+	}
+}
