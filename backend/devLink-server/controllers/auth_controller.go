@@ -79,6 +79,7 @@ func RegisterUser(client *mongo.Client) gin.HandlerFunc {
 		userCollection := database.OpenCollection("users", client)
 
 		count, err := userCollection.CountDocuments(ctx, bson.M{"email": user.Email})
+
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to check existing user"})
 			return
