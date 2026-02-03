@@ -15,7 +15,6 @@ import { apiFetch } from "@/lib/api";
 
 type Message = {
   id: string;
-  room_id?: string;
   sender_id: string;
   content: string;
   created_at: string;
@@ -67,11 +66,10 @@ export default function ChatRoomPage() {
   const [loadingMore, setLoadingMore] = useState(false);
 
   const socketRef = useRef<WebSocket | null>(null);
-  const bottomRef = useRef<HTMLDivElement | null>(null);
   const topRef = useRef<HTMLDivElement | null>(null);
+  const bottomRef = useRef<HTMLDivElement | null>(null);
 
-  /* ================= AUTH ME ================= */
-
+  /* ========== AUTH ME ========== */
   useEffect(() => {
     apiFetch("/auth/me")
       .then((res) =>
@@ -86,13 +84,12 @@ export default function ChatRoomPage() {
       .catch(() => router.push("/login"));
   }, []);
 
-  /* ================= INITIAL MESSAGES ================= */
-
+  /* ========== INITIAL MESSAGES ========== */
   useEffect(() => {
     if (!me) return;
 
-    apiFetch(`/chat/rooms/${room_id}/messages?limit=20`)
-      .then((msgs: Message[]) => {
+    apiFetch(`/chat/rooms/${room_id}/messages?limit=20`).then(
+      (msgs: Message[]) => {
         setMessages(msgs);
 
         const otherId = msgs.find(
@@ -100,18 +97,16 @@ export default function ChatRoomPage() {
         )?.sender_id;
 
         if (otherId) fetchOtherUser(otherId);
-
         if (msgs.length < 20) setHasMore(false);
-      });
+      }
+    );
   }, [me, room_id]);
 
-  /* ================= LOAD OLDER (INFINITE SCROLL) ================= */
-
-  const loadOlderMessages = async () => {
+  /* ========== LOAD OLDER ========== */
+  const loadOlder = async () => {
     if (!hasMore || loadingMore || !messages.length) return;
 
     setLoadingMore(true);
-
     const oldest = messages[0];
 
     const older: Message[] = await apiFetch(
@@ -119,31 +114,24 @@ export default function ChatRoomPage() {
     );
 
     if (!older.length) setHasMore(false);
-
     setMessages((prev) => [...older, ...prev]);
     setLoadingMore(false);
   };
 
-  /* ================= OBSERVER ================= */
-
+  /* ========== OBSERVER ========== */
   useEffect(() => {
     if (!topRef.current) return;
 
-    const observer = new IntersectionObserver(
-      (entries) => {
-        if (entries[0].isIntersecting) {
-          loadOlderMessages();
-        }
-      },
+    const obs = new IntersectionObserver(
+      ([entry]) => entry.isIntersecting && loadOlder(),
       { threshold: 1 }
     );
 
-    observer.observe(topRef.current);
-    return () => observer.disconnect();
+    obs.observe(topRef.current);
+    return () => obs.disconnect();
   }, [messages]);
 
-  /* ================= OTHER USER ================= */
-
+  /* ========== OTHER USER ========== */
   const fetchOtherUser = async (userId: string) => {
     const res = await apiFetch(`/users/${userId}`);
     setOtherUser({
@@ -155,19 +143,18 @@ export default function ChatRoomPage() {
     });
   };
 
-
+  /* ========== WEBSOCKET ========== */
   useEffect(() => {
-    if (!me) return;
+    if (!me || socketRef.current) return;
 
     const ws = new WebSocket(
-      `${process.env.NEXT_PUBLIC_API_URL}/ws/chat/${room_id}`
+      `${process.env.NEXT_PUBLIC_WS_URL}/ws/chat/${room_id}`
     );
 
     socketRef.current = ws;
 
     ws.onmessage = (e) => {
       const msg: Message = JSON.parse(e.data);
-
       setMessages((prev) => {
         const filtered = prev.filter(
           (m) => !(m.optimistic && m.content === msg.content)
@@ -176,51 +163,69 @@ export default function ChatRoomPage() {
       });
     };
 
-    return () => ws.close();
+    ws.onclose = () => {
+      socketRef.current = null;
+    };
+
+    return () => {
+      if (
+        ws.readyState === WebSocket.OPEN ||
+        ws.readyState === WebSocket.CONNECTING
+      ) {
+        ws.close();
+      }
+    };
   }, [me, room_id]);
 
-
+  /* ========== MARK SEEN ========== */
   useEffect(() => {
     if (!me || !messages.length) return;
 
-    const unseenIncoming = messages.some(
+    const unseen = messages.some(
       (m) => m.sender_id !== me.id && !m.seen_at
     );
 
-    if (unseenIncoming) {
-      apiFetch(`/chat/rooms/${room_id}/seen`, { method: "POST" }).catch(
-        () => {}
-      );
+    if (unseen) {
+      apiFetch(`/chat/rooms/${room_id}/seen`, {
+        method: "POST",
+      }).catch(() => {});
     }
   }, [messages, me, room_id]);
 
+  /* ========== SCROLL ========== */
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages]);
 
+  /* ========== SEND ========== */
   const sendMessage = () => {
     if (!text.trim() || !me) return;
 
     const tempId = `temp-${Date.now()}`;
 
-    const optimisticMsg: Message = {
-      id: tempId,
-      sender_id: me.id,
-      content: text,
-      created_at: new Date().toISOString(),
-      optimistic: true,
-    };
-
-    setMessages((prev) => [...prev, optimisticMsg]);
+    setMessages((prev) => [
+      ...prev,
+      {
+        id: tempId,
+        sender_id: me.id,
+        content: text,
+        created_at: new Date().toISOString(),
+        optimistic: true,
+      },
+    ]);
 
     socketRef.current?.send(JSON.stringify({ content: text }));
     setText("");
   };
 
-  /* ================= HELPERS ================= */
-
-  const lastMyMessageId = useMemo(() => {
-    return messages
-      .filter((m) => m.sender_id === me?.id)
-      .slice(-1)[0]?.id;
-  }, [messages, me]);
+  /* ========== HELPERS ========== */
+  const lastMyMessageId = useMemo(
+    () =>
+      messages
+        .filter((m) => m.sender_id === me?.id)
+        .slice(-1)[0]?.id,
+    [messages, me]
+  );
 
   const groupedMessages = useMemo(() => {
     const map: Record<string, Message[]> = {};
@@ -238,7 +243,7 @@ export default function ChatRoomPage() {
     <div className="flex flex-col h-screen bg-background-light dark:bg-background-dark">
 
       {/* HEADER */}
-      <header className="sticky top-0 z-50 flex items-center gap-3 px-4 py-3 border-b bg-background-light/80 dark:bg-background-dark/80 backdrop-blur">
+      <header className="sticky top-0 z-50 flex items-center gap-3 px-4 py-3 border-b backdrop-blur">
         <button onClick={() => router.back()}>
           <FiArrowLeft />
         </button>
@@ -268,7 +273,7 @@ export default function ChatRoomPage() {
         {Object.entries(groupedMessages).map(([date, msgs]) => (
           <div key={date} className="space-y-4">
             <div className="flex justify-center">
-              <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400 bg-slate-100 dark:bg-slate-800/50 px-3 py-1 rounded-full">
+              <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400 bg-slate-100 px-3 py-1 rounded-full">
                 {date}
               </span>
             </div>
@@ -336,7 +341,7 @@ export default function ChatRoomPage() {
       </main>
 
       {/* FOOTER */}
-      <footer className="fixed bottom-0 left-0 w-full p-4 bg-background-light/90 dark:bg-background-dark/90 border-t backdrop-blur">
+      <footer className="fixed bottom-0 left-0 w-full p-4 border-t backdrop-blur">
         <div className="flex items-center gap-3 max-w-screen-xl mx-auto">
           <button>
             <FiPlus />
@@ -347,7 +352,7 @@ export default function ChatRoomPage() {
             onChange={(e) => setText(e.target.value)}
             rows={1}
             placeholder="Type a message..."
-            className="flex-1 resize-none rounded-2xl px-4 py-2 text-sm bg-slate-100 dark:bg-slate-800"
+            className="flex-1 resize-none rounded-2xl px-4 py-2 text-sm bg-slate-100"
           />
 
           <button
