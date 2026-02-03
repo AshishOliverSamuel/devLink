@@ -2,12 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import {
-  FiArrowLeft,
-  FiMoreVertical,
-  FiSend,
-  FiPlus,
-} from "react-icons/fi";
+import { FiArrowLeft, FiSend, FiPlus } from "react-icons/fi";
 import { motion, AnimatePresence } from "framer-motion";
 import { apiFetch } from "@/lib/api";
 
@@ -62,14 +57,12 @@ export default function ChatRoomPage() {
   const [otherUser, setOtherUser] = useState<User | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [text, setText] = useState("");
-  const [hasMore, setHasMore] = useState(true);
-  const [loadingMore, setLoadingMore] = useState(false);
 
   const socketRef = useRef<WebSocket | null>(null);
-  const topRef = useRef<HTMLDivElement | null>(null);
   const bottomRef = useRef<HTMLDivElement | null>(null);
 
-  /* ========== AUTH ME ========== */
+  /* ================= AUTH ================= */
+
   useEffect(() => {
     apiFetch("/auth/me")
       .then((res) =>
@@ -84,54 +77,33 @@ export default function ChatRoomPage() {
       .catch(() => router.push("/login"));
   }, []);
 
-  /* ========== INITIAL MESSAGES ========== */
+  /* ================= FETCH MESSAGES ================= */
+
   useEffect(() => {
     if (!me) return;
 
-    apiFetch(`/chat/rooms/${room_id}/messages?limit=20`).then(
+    apiFetch(`/chat/rooms/${room_id}/messages`).then(
       (msgs: Message[]) => {
-        setMessages(msgs);
+        // 🔑 FIX: normalize order (oldest → newest)
+        const sorted = [...msgs].sort(
+          (a, b) =>
+            new Date(a.created_at).getTime() -
+            new Date(b.created_at).getTime()
+        );
 
-        const otherId = msgs.find(
+        setMessages(sorted);
+
+        const otherId = sorted.find(
           (m) => m.sender_id !== me.id
         )?.sender_id;
 
         if (otherId) fetchOtherUser(otherId);
-        if (msgs.length < 20) setHasMore(false);
       }
     );
   }, [me, room_id]);
 
-  /* ========== LOAD OLDER ========== */
-  const loadOlder = async () => {
-    if (!hasMore || loadingMore || !messages.length) return;
+  /* ================= OTHER USER ================= */
 
-    setLoadingMore(true);
-    const oldest = messages[0];
-
-    const older: Message[] = await apiFetch(
-      `/chat/rooms/${room_id}/messages?before=${oldest.created_at}&limit=20`
-    );
-
-    if (!older.length) setHasMore(false);
-    setMessages((prev) => [...older, ...prev]);
-    setLoadingMore(false);
-  };
-
-  /* ========== OBSERVER ========== */
-  useEffect(() => {
-    if (!topRef.current) return;
-
-    const obs = new IntersectionObserver(
-      ([entry]) => entry.isIntersecting && loadOlder(),
-      { threshold: 1 }
-    );
-
-    obs.observe(topRef.current);
-    return () => obs.disconnect();
-  }, [messages]);
-
-  /* ========== OTHER USER ========== */
   const fetchOtherUser = async (userId: string) => {
     const res = await apiFetch(`/users/${userId}`);
     setOtherUser({
@@ -143,18 +115,20 @@ export default function ChatRoomPage() {
     });
   };
 
-  /* ========== WEBSOCKET ========== */
+  /* ================= WEBSOCKET ================= */
+
   useEffect(() => {
     if (!me || socketRef.current) return;
 
     const ws = new WebSocket(
-      `${process.env.NEXT_PUBLIC_WS_URL}/ws/chat/${room_id}`
+      `ws://${window.location.host}/ws/chat/${room_id}`
     );
 
     socketRef.current = ws;
 
     ws.onmessage = (e) => {
       const msg: Message = JSON.parse(e.data);
+
       setMessages((prev) => {
         const filtered = prev.filter(
           (m) => !(m.optimistic && m.content === msg.content)
@@ -177,7 +151,8 @@ export default function ChatRoomPage() {
     };
   }, [me, room_id]);
 
-  /* ========== MARK SEEN ========== */
+  /* ================= MARK SEEN ================= */
+
   useEffect(() => {
     if (!me || !messages.length) return;
 
@@ -192,12 +167,14 @@ export default function ChatRoomPage() {
     }
   }, [messages, me, room_id]);
 
-  /* ========== SCROLL ========== */
+  /* ================= SCROLL ================= */
+
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  /* ========== SEND ========== */
+  /* ================= SEND ================= */
+
   const sendMessage = () => {
     if (!text.trim() || !me) return;
 
@@ -218,7 +195,8 @@ export default function ChatRoomPage() {
     setText("");
   };
 
-  /* ========== HELPERS ========== */
+  /* ================= HELPERS ================= */
+
   const lastMyMessageId = useMemo(
     () =>
       messages
@@ -240,7 +218,7 @@ export default function ChatRoomPage() {
   /* ================= UI ================= */
 
   return (
-    <div className="flex flex-col h-screen bg-background-light dark:bg-background-dark">
+    <div className="flex flex-col h-screen bg-background-light dark:bg-background-dark text-slate-900 dark:text-white">
 
       {/* HEADER */}
       <header className="sticky top-0 z-50 flex items-center gap-3 px-4 py-3 border-b backdrop-blur">
@@ -260,20 +238,14 @@ export default function ChatRoomPage() {
             </div>
           </>
         )}
-
-        <div className="ml-auto">
-          <FiMoreVertical />
-        </div>
       </header>
 
       {/* MESSAGES */}
-      <main className="flex-1 overflow-y-auto p-4 space-y-6">
-        <div ref={topRef} />
-
+      <main className="flex-1 overflow-y-auto p-4 space-y-6 pb-28">
         {Object.entries(groupedMessages).map(([date, msgs]) => (
           <div key={date} className="space-y-4">
             <div className="flex justify-center">
-              <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400 bg-slate-100 px-3 py-1 rounded-full">
+              <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400 bg-slate-100 dark:bg-slate-800/50 px-3 py-1 rounded-full">
                 {date}
               </span>
             </div>
@@ -320,14 +292,8 @@ export default function ChatRoomPage() {
 
                       <div className="flex items-center gap-1 text-[11px] text-slate-400">
                         {formatTime(msg.created_at)}
-                        {msg.optimistic && (
-                          <span className="italic">Sending…</span>
-                        )}
-                        {showSeen && (
-                          <span className="text-primary font-medium">
-                            Seen
-                          </span>
-                        )}
+                        {msg.optimistic && <span className="italic">Sending…</span>}
+                        {showSeen && <span className="text-primary font-medium">Seen</span>}
                       </div>
                     </div>
                   </motion.div>
@@ -341,26 +307,30 @@ export default function ChatRoomPage() {
       </main>
 
       {/* FOOTER */}
-      <footer className="fixed bottom-0 left-0 w-full p-4 border-t backdrop-blur">
+      <footer className="fixed bottom-0 left-0 w-full p-4 bg-background-light/90 dark:bg-background-dark/90 backdrop-blur border-t">
         <div className="flex items-center gap-3 max-w-screen-xl mx-auto">
-          <button>
+
+          <button className="text-slate-500">
             <FiPlus />
           </button>
 
-          <textarea
-            value={text}
-            onChange={(e) => setText(e.target.value)}
-            rows={1}
-            placeholder="Type a message..."
-            className="flex-1 resize-none rounded-2xl px-4 py-2 text-sm bg-slate-100"
-          />
+          <div className="flex-1 flex items-center bg-slate-100 dark:bg-slate-800 rounded-2xl px-4 py-2">
+            <textarea
+              value={text}
+              onChange={(e) => setText(e.target.value)}
+              rows={1}
+              placeholder="Type a message..."
+              className="w-full bg-transparent text-slate-900 dark:text-white placeholder-slate-400 resize-none py-1 focus:outline-none"
+            />
+          </div>
 
           <button
             onClick={sendMessage}
-            className="size-10 rounded-full bg-primary text-white"
+            className="size-10 rounded-full bg-primary text-white p-2"
           >
             <FiSend />
           </button>
+
         </div>
       </footer>
     </div>
