@@ -38,7 +38,6 @@ type Request = RawRequest & {
   sender?: User;
 };
 
-/* ================= PAGE ================= */
 
 export default function ChatsPage() {
   const router = useRouter();
@@ -49,14 +48,13 @@ export default function ChatsPage() {
   const [counts, setCounts] = useState({ requests: 0, unread: 0 });
   const [loading, setLoading] = useState(true);
 
-  /* ================= COUNTS (WITH FIX) ================= */
 
   const loadCounts = () => {
     apiFetch("/chat/counts")
       .then((res) => {
         setCounts({
           requests: res?.requests ?? 0,
-          unread: res?.unread_messages ?? 0, // 👈 FIX
+          unread: res?.unread_messages ?? 0, 
         });
       })
       .catch(() => setCounts({ requests: 0, unread: 0 }));
@@ -66,12 +64,10 @@ export default function ChatsPage() {
     loadCounts();
   }, []);
 
-  /* ================= DATA ================= */
 
   useEffect(() => {
     setLoading(true);
 
-    /* -------- INBOX -------- */
     if (tab === "inbox") {
       apiFetch("/chatrooms")
         .then(async (res) => {
@@ -105,7 +101,6 @@ export default function ChatsPage() {
       return;
     }
 
-    /* -------- REQUESTS -------- */
     apiFetch("/chat/requests")
       .then(async (res) => {
         const raw: RawRequest[] = Array.isArray(res) ? res : [];
@@ -220,7 +215,7 @@ export default function ChatsPage() {
               <motion.div
                 key={r.room_id}
                 whileHover={{ scale: 1.01 }}
-                onClick={() => router.push(`/chats/${r.room_id}`)}
+                onClick={() => router.push(`/chat/${r.room_id}`)}
                 className="cursor-pointer bg-[#192633] border border-slate-800 rounded-xl p-4 flex gap-4"
               >
                 <img
