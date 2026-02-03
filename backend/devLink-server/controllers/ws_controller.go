@@ -63,23 +63,17 @@ func ChatWebSocket(client *mongo.Client) gin.HandlerFunc {
 			return
 		}
 
-		claims := token.Claims.(jwt.MapClaims)
-
-		if claims["type"] != "ws" {
-	conn.Close()
-	return
-}
-
+		claims, ok := token.Claims.(jwt.MapClaims)
+		if !ok || claims["type"] != "ws" {
+			conn.Close()
+			return
+		}
 
 		userID, err := bson.ObjectIDFromHex(claims["user_id"].(string))
 		if err != nil {
 			conn.Close()
 			return
 		}
-
-
-
-
 
 		roomIDParam := c.Param("room_id")
 		roomID, err := bson.ObjectIDFromHex(roomIDParam)
@@ -100,6 +94,7 @@ func ChatWebSocket(client *mongo.Client) gin.HandlerFunc {
 		}
 
 		roomKey := roomID.Hex()
+
 		if roomClients[roomKey] == nil {
 			roomClients[roomKey] = make(map[*websocket.Conn]bool)
 		}
@@ -136,23 +131,27 @@ func ChatWebSocket(client *mongo.Client) gin.HandlerFunc {
 		}()
 
 		for {
-			var payload map[string]interface{}
+			var payload struct {
+				Type      string `json:"type"`
+				Content   string `json:"content,omitempty"`
+				IsTyping  bool   `json:"is_typing,omitempty"`
+			}
+
 			if err := conn.ReadJSON(&payload); err != nil {
 				break
 			}
 
-			switch payload["type"] {
+			switch payload.Type {
 
 			case "typing":
 				broadcast(roomKey, gin.H{
 					"type":      "typing",
 					"user_id":   userID.Hex(),
-					"is_typing": payload["is_typing"],
+					"is_typing": payload.IsTyping,
 				})
 
 			case "message":
-				content, ok := payload["content"].(string)
-				if !ok || content == "" {
+				if payload.Content == "" {
 					continue
 				}
 
@@ -161,18 +160,20 @@ func ChatWebSocket(client *mongo.Client) gin.HandlerFunc {
 					ID:        bson.NewObjectID(),
 					RoomID:    roomID,
 					SenderID:  userID,
-					Content:   content,
+					Content:   payload.Content,
 					CreatedAt: time.Now(),
 				}
 
-				msgCol.InsertOne(context.Background(), message)
+				if _, err := msgCol.InsertOne(context.Background(), message); err != nil {
+					continue
+				}
 
 				broadcast(roomKey, gin.H{
 					"type":        "message",
 					"id":          message.ID.Hex(),
 					"room_id":     roomKey,
 					"sender_id":   userID.Hex(),
-					"content":     content,
+					"content":     message.Content,
 					"created_at": message.CreatedAt,
 				})
 			}

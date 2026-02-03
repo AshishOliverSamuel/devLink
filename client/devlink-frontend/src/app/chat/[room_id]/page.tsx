@@ -6,7 +6,6 @@ import { FiArrowLeft, FiSend, FiPlus } from "react-icons/fi";
 import { motion, AnimatePresence } from "framer-motion";
 import { apiFetch } from "@/lib/api";
 
-/* ================= TYPES ================= */
 
 type Message = {
   id: string;
@@ -23,7 +22,6 @@ type User = {
   avatar: string;
 };
 
-/* ================= HELPERS ================= */
 
 const formatTime = (date: string) =>
   new Date(date).toLocaleTimeString([], {
@@ -52,7 +50,6 @@ const formatDateLabel = (date: string) => {
   });
 };
 
-/* ================= PAGE ================= */
 
 export default function ChatRoomPage() {
   const { room_id } = useParams();
@@ -63,7 +60,6 @@ export default function ChatRoomPage() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [text, setText] = useState("");
 
-  // presence
   const [online, setOnline] = useState(false);
   const [lastSeen, setLastSeen] = useState<string | undefined>();
   const [typing, setTyping] = useState(false);
@@ -127,78 +123,70 @@ export default function ChatRoomPage() {
   useEffect(() => {
     if (!me || socketRef.current) return;
 
-    const WS_BASE_URL =
-      process.env.NEXT_PUBLIC_WS_URL || "ws://localhost:8080";
+    const connectWS = async () => {
+      try {
+        const res = await apiFetch("/ws/token");
+        const wsToken = res.token;
 
-    const token = document.cookie
-      .split("; ")
-      .find((row) => row.startsWith("access_token="))
-      ?.split("=")[1];
+        const WS_BASE_URL =
+          process.env.NEXT_PUBLIC_WS_URL || "ws://localhost:8080";
 
-    if (!token) {
-      console.error("❌ No access token for WebSocket");
-      return;
-    }
+        const ws = new WebSocket(
+          `${WS_BASE_URL}/ws/chat/${room_id}?token=${wsToken}`
+        );
 
-    const ws = new WebSocket(
-      `${WS_BASE_URL}/ws/chat/${room_id}?token=${token}`
-    );
+        socketRef.current = ws;
 
-    socketRef.current = ws;
+        ws.onopen = () => {
+          console.log("✅ WebSocket connected");
+        };
 
-    ws.onopen = () => {
-      console.log("✅ WebSocket connected");
-    };
+        ws.onmessage = (e) => {
+          const data = JSON.parse(e.data);
 
-    ws.onmessage = (e) => {
-      const data = JSON.parse(e.data);
+          switch (data.type) {
+            case "message":
+              setMessages((prev) => {
+                const filtered = prev.filter(
+                  (m) => !(m.optimistic && m.content === data.content)
+                );
+                return [...filtered, data];
+              });
+              break;
 
-      switch (data.type) {
-        case "message":
-          setMessages((prev) => {
-            const filtered = prev.filter(
-              (m) => !(m.optimistic && m.content === data.content)
-            );
-            return [...filtered, data];
-          });
-          break;
+            case "typing":
+              if (data.user_id !== me.id) {
+                setTyping(data.is_typing);
+              }
+              break;
 
-        case "typing":
-          if (data.user_id !== me.id) {
-            setTyping(data.is_typing);
+            case "user_online":
+              if (data.user_id !== me.id) setOnline(true);
+              break;
+
+            case "user_offline":
+              if (data.user_id !== me.id) {
+                setOnline(false);
+                setLastSeen(data.last_seen);
+              }
+              break;
           }
-          break;
+        };
 
-        case "user_online":
-          if (data.user_id !== me.id) setOnline(true);
-          break;
+        ws.onerror = () => {
+          console.error("❌ WebSocket error");
+        };
 
-        case "user_offline":
-          if (data.user_id !== me.id) {
-            setOnline(false);
-            setLastSeen(data.last_seen);
-          }
-          break;
+        ws.onclose = () => {
+          socketRef.current = null;
+          console.log("🔌 WebSocket closed");
+        };
+      } catch (err) {
+        console.error("❌ Failed to connect WebSocket", err);
       }
     };
 
-    ws.onerror = (err) => {
-      console.error("❌ WebSocket error", err);
-    };
-
-    ws.onclose = () => {
-      socketRef.current = null;
-      console.log("🔌 WebSocket closed");
-    };
-
-    return () => {
-      if (
-        ws.readyState === WebSocket.OPEN ||
-        ws.readyState === WebSocket.CONNECTING
-      ) {
-        ws.close();
-      }
-    };
+    connectWS();
   }, [me, room_id]);
 
 
@@ -323,6 +311,7 @@ export default function ChatRoomPage() {
         )}
       </header>
 
+      {/* MESSAGES */}
       <main className="flex-1 overflow-y-auto p-4 space-y-6 pb-28">
         {Object.entries(groupedMessages).map(([date, msgs]) => (
           <div key={date} className="space-y-4">
@@ -392,6 +381,7 @@ export default function ChatRoomPage() {
         <div ref={bottomRef} />
       </main>
 
+      {/* FOOTER */}
       <footer className="fixed bottom-0 left-0 w-full p-4 backdrop-blur border-t bg-background-light/90 dark:bg-background-dark/90">
         <div className="flex items-center gap-3 max-w-screen-xl mx-auto">
 
