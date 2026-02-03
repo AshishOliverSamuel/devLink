@@ -1,12 +1,12 @@
-const API_URL = process.env.NEXT_PUBLIC_API_URL;
+const API_URL = process.env.NEXT_PUBLIC_API_URL!;
 
 export const apiFetch = async (
   url: string,
   options: RequestInit = {}
 ) => {
   const res = await fetch(`${API_URL}${url}`, {
-    ...options,
     credentials: "include",
+    ...options,
     headers: {
       "Content-Type": "application/json",
       ...(options.headers || {}),
@@ -14,8 +14,11 @@ export const apiFetch = async (
   });
 
   if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw err;
+    let error: any = { status: res.status };
+    try {
+      error = await res.json();
+    } catch {}
+    throw error;
   }
 
   return res.json();
