@@ -2,18 +2,25 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { FiArrowLeft, FiMoreVertical, FiSend, FiPlus } from "react-icons/fi";
+import {
+  FiArrowLeft,
+  FiMoreVertical,
+  FiSend,
+  FiPlus,
+} from "react-icons/fi";
 import { motion, AnimatePresence } from "framer-motion";
 import { apiFetch } from "@/lib/api";
 
-/* ---------------- Types ---------------- */
+/* ================= TYPES ================= */
+
 type Message = {
   id: string;
-  room_id: string;
+  room_id?: string;
   sender_id: string;
   content: string;
   created_at: string;
-  seen: boolean;
+  seen_at?: string | null;
+  optimistic?: boolean;
 };
 
 type User = {
@@ -22,7 +29,8 @@ type User = {
   avatar: string;
 };
 
-/* ---------------- Helpers ---------------- */
+/* ================= HELPERS ================= */
+
 const formatTime = (date: string) =>
   new Date(date).toLocaleTimeString([], {
     hour: "2-digit",
@@ -45,7 +53,7 @@ const formatDateLabel = (date: string) => {
   });
 };
 
-/* ================================================= */
+/* ================= PAGE ================= */
 
 export default function ChatRoomPage() {
   const { room_id } = useParams();
@@ -54,15 +62,18 @@ export default function ChatRoomPage() {
   const [me, setMe] = useState<User | null>(null);
   const [otherUser, setOtherUser] = useState<User | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
-  const [loading, setLoading] = useState(true);
   const [text, setText] = useState("");
+  const [hasMore, setHasMore] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
 
   const socketRef = useRef<WebSocket | null>(null);
   const bottomRef = useRef<HTMLDivElement | null>(null);
+  const topRef = useRef<HTMLDivElement | null>(null);
 
-  /* ---------------- Fetch Me ---------------- */
+  /* ================= AUTH ME ================= */
+
   useEffect(() => {
-    apiFetch("/me")
+    apiFetch("/auth/me")
       .then((res) =>
         setMe({
           id: res.id,
@@ -75,13 +86,12 @@ export default function ChatRoomPage() {
       .catch(() => router.push("/login"));
   }, []);
 
-  /* ---------------- Fetch Messages ---------------- */
+  /* ================= INITIAL MESSAGES ================= */
+
   useEffect(() => {
     if (!me) return;
 
-    setLoading(true);
-
-    apiFetch(`/chat/rooms/${room_id}/messages`)
+    apiFetch(`/chat/rooms/${room_id}/messages?limit=20`)
       .then((msgs: Message[]) => {
         setMessages(msgs);
 
@@ -90,14 +100,52 @@ export default function ChatRoomPage() {
         )?.sender_id;
 
         if (otherId) fetchOtherUser(otherId);
-      })
-      .finally(() => setLoading(false));
+
+        if (msgs.length < 20) setHasMore(false);
+      });
   }, [me, room_id]);
 
-  /* ---------------- Fetch Other User ---------------- */
+  /* ================= LOAD OLDER (INFINITE SCROLL) ================= */
+
+  const loadOlderMessages = async () => {
+    if (!hasMore || loadingMore || !messages.length) return;
+
+    setLoadingMore(true);
+
+    const oldest = messages[0];
+
+    const older: Message[] = await apiFetch(
+      `/chat/rooms/${room_id}/messages?before=${oldest.created_at}&limit=20`
+    );
+
+    if (!older.length) setHasMore(false);
+
+    setMessages((prev) => [...older, ...prev]);
+    setLoadingMore(false);
+  };
+
+  /* ================= OBSERVER ================= */
+
+  useEffect(() => {
+    if (!topRef.current) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting) {
+          loadOlderMessages();
+        }
+      },
+      { threshold: 1 }
+    );
+
+    observer.observe(topRef.current);
+    return () => observer.disconnect();
+  }, [messages]);
+
+  /* ================= OTHER USER ================= */
+
   const fetchOtherUser = async (userId: string) => {
     const res = await apiFetch(`/users/${userId}`);
-
     setOtherUser({
       id: userId,
       name: res.user.name,
@@ -107,87 +155,105 @@ export default function ChatRoomPage() {
     });
   };
 
-  /* ---------------- WebSocket ---------------- */
+
   useEffect(() => {
     if (!me) return;
 
     const ws = new WebSocket(
       `${process.env.NEXT_PUBLIC_API_URL}/ws/chat/${room_id}`
     );
+
     socketRef.current = ws;
 
     ws.onmessage = (e) => {
-      const msg = JSON.parse(e.data);
-      setMessages((prev) => [...prev, msg]);
+      const msg: Message = JSON.parse(e.data);
+
+      setMessages((prev) => {
+        const filtered = prev.filter(
+          (m) => !(m.optimistic && m.content === msg.content)
+        );
+        return [...filtered, msg];
+      });
     };
 
     return () => ws.close();
   }, [me, room_id]);
 
-  /* ---------------- Seen ---------------- */
+
   useEffect(() => {
-    if (!messages.length) return;
+    if (!me || !messages.length) return;
 
-    apiFetch(`/chat/rooms/${room_id}/seen`, {
-      method: "POST",
-    }).catch(() => {});
-  }, [messages, room_id]);
+    const unseenIncoming = messages.some(
+      (m) => m.sender_id !== me.id && !m.seen_at
+    );
 
-  /* ---------------- Scroll ---------------- */
-  useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages]);
+    if (unseenIncoming) {
+      apiFetch(`/chat/rooms/${room_id}/seen`, { method: "POST" }).catch(
+        () => {}
+      );
+    }
+  }, [messages, me, room_id]);
 
-  /* ---------------- Send ---------------- */
+
   const sendMessage = () => {
-    if (!text.trim()) return;
+    if (!text.trim() || !me) return;
+
+    const tempId = `temp-${Date.now()}`;
+
+    const optimisticMsg: Message = {
+      id: tempId,
+      sender_id: me.id,
+      content: text,
+      created_at: new Date().toISOString(),
+      optimistic: true,
+    };
+
+    setMessages((prev) => [...prev, optimisticMsg]);
 
     socketRef.current?.send(JSON.stringify({ content: text }));
     setText("");
   };
 
-  /* ---------------- Group Messages ---------------- */
+  /* ================= HELPERS ================= */
+
+  const lastMyMessageId = useMemo(() => {
+    return messages
+      .filter((m) => m.sender_id === me?.id)
+      .slice(-1)[0]?.id;
+  }, [messages, me]);
+
   const groupedMessages = useMemo(() => {
     const map: Record<string, Message[]> = {};
-
-    messages.forEach((msg) => {
-      const key = formatDateLabel(msg.created_at);
+    messages.forEach((m) => {
+      const key = formatDateLabel(m.created_at);
       if (!map[key]) map[key] = [];
-      map[key].push(msg);
+      map[key].push(m);
     });
-
     return map;
   }, [messages]);
 
-  /* ================================================= */
+  /* ================= UI ================= */
 
   return (
     <div className="flex flex-col h-screen bg-background-light dark:bg-background-dark">
 
-      {/* ---------------- Header ---------------- */}
-      <header className="sticky top-0 z-10 flex items-center gap-3 px-4 py-3 border-b bg-white/80 dark:bg-background-dark/80 backdrop-blur">
+      {/* HEADER */}
+      <header className="sticky top-0 z-50 flex items-center gap-3 px-4 py-3 border-b bg-background-light/80 dark:bg-background-dark/80 backdrop-blur">
         <button onClick={() => router.back()}>
           <FiArrowLeft />
         </button>
 
-        {loading ? (
-          <div className="flex items-center gap-3 animate-pulse">
-            <div className="w-10 h-10 rounded-full bg-slate-300" />
-            <div className="h-3 w-24 bg-slate-300 rounded" />
-          </div>
-        ) : (
-          otherUser && (
-            <>
-              <div
-                className="w-10 h-10 rounded-full bg-cover bg-center border"
-                style={{ backgroundImage: `url(${otherUser.avatar})` }}
-              />
-              <div>
-                <h2 className="text-sm font-bold">{otherUser.name}</h2>
-                <p className="text-xs text-slate-500">Chat</p>
-              </div>
-            </>
-          )
+        {otherUser && (
+          <>
+            <div
+              className="w-10 h-10 rounded-full bg-cover bg-center border"
+              style={{ backgroundImage: `url(${otherUser.avatar})` }}
+            />
+            <div>
+              <h2 className="text-sm font-bold">{otherUser.name}</h2>
+              <p className="text-xs text-slate-500">Chat</p>
+            </div>
+          </>
         )}
 
         <div className="ml-auto">
@@ -195,92 +261,84 @@ export default function ChatRoomPage() {
         </div>
       </header>
 
-      {/* ---------------- Messages ---------------- */}
+      {/* MESSAGES */}
       <main className="flex-1 overflow-y-auto p-4 space-y-6">
-        {loading ? (
-          [...Array(6)].map((_, i) => (
-            <div
-              key={i}
-              className={`h-12 w-2/3 rounded-2xl bg-slate-200 animate-pulse ${
-                i % 2 ? "ml-auto" : ""
-              }`}
-            />
-          ))
-        ) : (
-          Object.entries(groupedMessages).map(([date, msgs]) => (
-            <div key={date} className="space-y-4">
-              <div className="flex justify-center">
-                <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400 bg-slate-100 px-3 py-1 rounded-full">
-                  {date}
-                </span>
-              </div>
+        <div ref={topRef} />
 
-              <AnimatePresence>
-                {msgs.map((msg) => {
-                  const isMe = msg.sender_id === me?.id;
+        {Object.entries(groupedMessages).map(([date, msgs]) => (
+          <div key={date} className="space-y-4">
+            <div className="flex justify-center">
+              <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400 bg-slate-100 dark:bg-slate-800/50 px-3 py-1 rounded-full">
+                {date}
+              </span>
+            </div>
 
-                  return (
-                    <motion.div
-                      key={msg.id}
-                      initial={{ opacity: 0, y: 12 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      className={`flex gap-3 ${
-                        isMe ? "justify-end" : "justify-start"
+            <AnimatePresence>
+              {msgs.map((msg) => {
+                const isMe = msg.sender_id === me?.id;
+                const showSeen =
+                  isMe &&
+                  msg.id === lastMyMessageId &&
+                  msg.seen_at;
+
+                return (
+                  <motion.div
+                    key={msg.id}
+                    initial={{ opacity: 0, y: 6 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className={`flex gap-3 max-w-[85%] ${
+                      isMe ? "ml-auto justify-end" : ""
+                    }`}
+                  >
+                    {!isMe && otherUser && (
+                      <div
+                        className="w-8 h-8 rounded-full bg-cover bg-center border"
+                        style={{ backgroundImage: `url(${otherUser.avatar})` }}
+                      />
+                    )}
+
+                    <div
+                      className={`flex flex-col gap-1 ${
+                        isMe ? "items-end" : "items-start"
                       }`}
                     >
-                      {!isMe && otherUser && (
-                        <div
-                          className="w-8 h-8 rounded-full bg-cover bg-center border"
-                          style={{
-                            backgroundImage: `url(${otherUser.avatar})`,
-                          }}
-                        />
-                      )}
-
                       <div
-                        className={`max-w-[80%] flex flex-col ${
-                          isMe ? "items-end" : "items-start"
+                        className={`px-4 py-3 text-sm rounded-2xl
+                        ${
+                          isMe
+                            ? "bg-primary text-white rounded-br-none"
+                            : "bg-white dark:bg-[#233648] rounded-bl-none"
                         }`}
                       >
-                        <div
-                          className={`px-4 py-3 text-sm rounded-2xl shadow-sm
-                          ${
-                            isMe
-                              ? "bg-primary text-white rounded-br-none"
-                              : "bg-white dark:bg-[#233648] rounded-bl-none"
-                          }`}
-                        >
-                          {msg.content}
-                        </div>
-
-                        <div className="flex items-center gap-1 mt-1 text-[11px] text-slate-400">
-                          {formatTime(msg.created_at)}
-                          {isMe && (
-                            <motion.span
-                              initial={{ opacity: 0 }}
-                              animate={{ opacity: msg.seen ? 1 : 0.4 }}
-                              className="ml-1 text-primary font-medium"
-                            >
-                              {msg.seen ? "Seen" : "Sent"}
-                            </motion.span>
-                          )}
-                        </div>
+                        {msg.content}
                       </div>
-                    </motion.div>
-                  );
-                })}
-              </AnimatePresence>
-            </div>
-          ))
-        )}
+
+                      <div className="flex items-center gap-1 text-[11px] text-slate-400">
+                        {formatTime(msg.created_at)}
+                        {msg.optimistic && (
+                          <span className="italic">Sending…</span>
+                        )}
+                        {showSeen && (
+                          <span className="text-primary font-medium">
+                            Seen
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </motion.div>
+                );
+              })}
+            </AnimatePresence>
+          </div>
+        ))}
 
         <div ref={bottomRef} />
       </main>
 
-      {/* ---------------- Input ---------------- */}
-      <footer className="p-4 border-t bg-white/90 dark:bg-background-dark/90 backdrop-blur">
-        <div className="flex items-center gap-3">
-          <button className="text-slate-500">
+      {/* FOOTER */}
+      <footer className="fixed bottom-0 left-0 w-full p-4 bg-background-light/90 dark:bg-background-dark/90 border-t backdrop-blur">
+        <div className="flex items-center gap-3 max-w-screen-xl mx-auto">
+          <button>
             <FiPlus />
           </button>
 
@@ -289,12 +347,12 @@ export default function ChatRoomPage() {
             onChange={(e) => setText(e.target.value)}
             rows={1}
             placeholder="Type a message..."
-            className="flex-1 resize-none rounded-2xl px-4 py-2 text-sm bg-slate-100 dark:bg-slate-800 focus:outline-none"
+            className="flex-1 resize-none rounded-2xl px-4 py-2 text-sm bg-slate-100 dark:bg-slate-800"
           />
 
           <button
             onClick={sendMessage}
-            className="p-3 rounded-full bg-primary text-white active:scale-95 transition"
+            className="size-10 rounded-full bg-primary text-white"
           >
             <FiSend />
           </button>
