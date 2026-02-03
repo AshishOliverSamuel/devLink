@@ -69,6 +69,7 @@ c.JSON(http.StatusOK, gin.H{
 				"name": user.UserName,
 				"bio":  user.Bio,
 				"profile_image":user.ProfileImage,
+				"last_seen":user.LastSeen,
 			},
 			"posts": posts,
 		})	}
