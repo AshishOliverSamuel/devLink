@@ -20,6 +20,7 @@ type ChatRequest struct{
 type ChatRoom struct{
 	ID bson.ObjectID `bson:"_id,omitempty" json:"id,omitempty"`
 	Participants []bson.ObjectID `bson:"participants" json:"participants"`
+	LastMessageAt time.Time      `bson:"last_message_at" json:"last_message_at"`
 	CreatedAt time.Time `bson:"created_at" json:"created_at"`
 	
 }
