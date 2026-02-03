@@ -2,7 +2,7 @@ package controllers
 
 import (
 	"context"
-	
+	"log"
 	"net/http"
 	"os"
 	"time"
@@ -17,16 +17,26 @@ import (
 )
 
 
-
-var upgrader=websocket.Upgrader{
-	
-	CheckOrigin: func(r*http.Request) bool{
+var upgrader = websocket.Upgrader{
+	CheckOrigin: func(r *http.Request) bool {
 		return true
 	},
 }
 
-var roomClients=make(map[string]map[*websocket.Conn]bool)
+var roomClients = make(map[string]map[*websocket.Conn]bool)
+
 var onlineUsers = make(map[string]bool)
+
+
+func broadcast(roomKey string, payload gin.H) {
+	for conn := range roomClients[roomKey] {
+		if err := conn.WriteJSON(payload); err != nil {
+			conn.Close()
+			delete(roomClients[roomKey], conn)
+		}
+	}
+}
+
 
 func ChatWebSocket(client *mongo.Client) gin.HandlerFunc {
 	return func(c *gin.Context) {
@@ -36,14 +46,15 @@ func ChatWebSocket(client *mongo.Client) gin.HandlerFunc {
 			return
 		}
 
-		tokenCookie, err := c.Request.Cookie("access_token")
-		if err != nil {
+		tokenString := c.Query("token")
+		if tokenString == "" {
 			conn.Close()
 			return
 		}
 
 		secret := os.Getenv("JWT_SECRET")
-		token, err := jwt.Parse(tokenCookie.Value, func(token *jwt.Token) (interface{}, error) {
+
+		token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
 			return []byte(secret), nil
 		})
 
@@ -53,7 +64,11 @@ func ChatWebSocket(client *mongo.Client) gin.HandlerFunc {
 		}
 
 		claims := token.Claims.(jwt.MapClaims)
-		userID, _ := bson.ObjectIDFromHex(claims["user_id"].(string))
+		userID, err := bson.ObjectIDFromHex(claims["user_id"].(string))
+		if err != nil {
+			conn.Close()
+			return
+		}
 
 		roomIDParam := c.Param("room_id")
 		roomID, err := bson.ObjectIDFromHex(roomIDParam)
@@ -80,19 +95,19 @@ func ChatWebSocket(client *mongo.Client) gin.HandlerFunc {
 		roomClients[roomKey][conn] = true
 
 		onlineUsers[userID.Hex()] = true
-
 		broadcast(roomKey, gin.H{
 			"type":    "user_online",
 			"user_id": userID.Hex(),
 		})
 
+		log.Println("✅ WS CONNECTED:", userID.Hex(), "ROOM:", roomKey)
+
 		defer func() {
 			delete(roomClients[roomKey], conn)
 			delete(onlineUsers, userID.Hex())
 
-			// update last_seen
-			usersCol := database.OpenCollection("users", client)
 			now := time.Now()
+			usersCol := database.OpenCollection("users", client)
 			usersCol.UpdateOne(
 				context.Background(),
 				bson.M{"_id": userID},
@@ -106,9 +121,9 @@ func ChatWebSocket(client *mongo.Client) gin.HandlerFunc {
 			})
 
 			conn.Close()
+			log.Println("🔌 WS DISCONNECTED:", userID.Hex())
 		}()
 
-		// 🔁 READ LOOP
 		for {
 			var payload map[string]interface{}
 			if err := conn.ReadJSON(&payload); err != nil {
@@ -125,7 +140,10 @@ func ChatWebSocket(client *mongo.Client) gin.HandlerFunc {
 				})
 
 			case "message":
-				content := payload["content"].(string)
+				content, ok := payload["content"].(string)
+				if !ok || content == "" {
+					continue
+				}
 
 				msgCol := database.OpenCollection("messages", client)
 				message := models.Message{
@@ -147,16 +165,6 @@ func ChatWebSocket(client *mongo.Client) gin.HandlerFunc {
 					"created_at": message.CreatedAt,
 				})
 			}
-		}
-	}
-}
-
-
-func broadcast(roomKey string, data gin.H) {
-	for conn := range roomClients[roomKey] {
-		if err := conn.WriteJSON(data); err != nil {
-			conn.Close()
-			delete(roomClients[roomKey], conn)
 		}
 	}
 }

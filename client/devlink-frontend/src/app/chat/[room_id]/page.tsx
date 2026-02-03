@@ -31,6 +31,11 @@ const formatTime = (date: string) =>
     minute: "2-digit",
   });
 
+const formatLastSeen = (date?: string) => {
+  if (!date) return "";
+  return `last seen ${formatTime(date)}`;
+};
+
 const formatDateLabel = (date: string) => {
   const d = new Date(date);
   const today = new Date();
@@ -58,10 +63,15 @@ export default function ChatRoomPage() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [text, setText] = useState("");
 
+  // presence
+  const [online, setOnline] = useState(false);
+  const [lastSeen, setLastSeen] = useState<string | undefined>();
+  const [typing, setTyping] = useState(false);
+
   const socketRef = useRef<WebSocket | null>(null);
   const bottomRef = useRef<HTMLDivElement | null>(null);
+  const typingTimeout = useRef<NodeJS.Timeout | null>(null);
 
-  /* ================= AUTH ================= */
 
   useEffect(() => {
     apiFetch("/auth/me")
@@ -77,14 +87,12 @@ export default function ChatRoomPage() {
       .catch(() => router.push("/login"));
   }, []);
 
-  /* ================= FETCH MESSAGES ================= */
 
   useEffect(() => {
     if (!me) return;
 
     apiFetch(`/chat/rooms/${room_id}/messages`).then(
       (msgs: Message[]) => {
-        // 🔑 FIX: normalize order (oldest → newest)
         const sorted = [...msgs].sort(
           (a, b) =>
             new Date(a.created_at).getTime() -
@@ -102,7 +110,6 @@ export default function ChatRoomPage() {
     );
   }, [me, room_id]);
 
-  /* ================= OTHER USER ================= */
 
   const fetchOtherUser = async (userId: string) => {
     const res = await apiFetch(`/users/${userId}`);
@@ -113,32 +120,75 @@ export default function ChatRoomPage() {
         res.user.profile_image ||
         "https://ui-avatars.com/api/?name=User",
     });
+    setLastSeen(res.user.last_seen);
   };
 
-  /* ================= WEBSOCKET ================= */
 
   useEffect(() => {
     if (!me || socketRef.current) return;
 
+    const WS_BASE_URL =
+      process.env.NEXT_PUBLIC_WS_URL || "ws://localhost:8080";
+
+    const token = document.cookie
+      .split("; ")
+      .find((row) => row.startsWith("access_token="))
+      ?.split("=")[1];
+
+    if (!token) {
+      console.error("❌ No access token for WebSocket");
+      return;
+    }
+
     const ws = new WebSocket(
-      `ws://${window.location.host}/ws/chat/${room_id}`
+      `${WS_BASE_URL}/ws/chat/${room_id}?token=${token}`
     );
 
     socketRef.current = ws;
 
-    ws.onmessage = (e) => {
-      const msg: Message = JSON.parse(e.data);
+    ws.onopen = () => {
+      console.log("✅ WebSocket connected");
+    };
 
-      setMessages((prev) => {
-        const filtered = prev.filter(
-          (m) => !(m.optimistic && m.content === msg.content)
-        );
-        return [...filtered, msg];
-      });
+    ws.onmessage = (e) => {
+      const data = JSON.parse(e.data);
+
+      switch (data.type) {
+        case "message":
+          setMessages((prev) => {
+            const filtered = prev.filter(
+              (m) => !(m.optimistic && m.content === data.content)
+            );
+            return [...filtered, data];
+          });
+          break;
+
+        case "typing":
+          if (data.user_id !== me.id) {
+            setTyping(data.is_typing);
+          }
+          break;
+
+        case "user_online":
+          if (data.user_id !== me.id) setOnline(true);
+          break;
+
+        case "user_offline":
+          if (data.user_id !== me.id) {
+            setOnline(false);
+            setLastSeen(data.last_seen);
+          }
+          break;
+      }
+    };
+
+    ws.onerror = (err) => {
+      console.error("❌ WebSocket error", err);
     };
 
     ws.onclose = () => {
       socketRef.current = null;
+      console.log("🔌 WebSocket closed");
     };
 
     return () => {
@@ -151,7 +201,6 @@ export default function ChatRoomPage() {
     };
   }, [me, room_id]);
 
-  /* ================= MARK SEEN ================= */
 
   useEffect(() => {
     if (!me || !messages.length) return;
@@ -167,23 +216,34 @@ export default function ChatRoomPage() {
     }
   }, [messages, me, room_id]);
 
-  /* ================= SCROLL ================= */
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages]);
+  }, [messages, typing]);
 
-  /* ================= SEND ================= */
+
+  const emitTyping = () => {
+    socketRef.current?.send(
+      JSON.stringify({ type: "typing", is_typing: true })
+    );
+
+    if (typingTimeout.current) clearTimeout(typingTimeout.current);
+
+    typingTimeout.current = setTimeout(() => {
+      socketRef.current?.send(
+        JSON.stringify({ type: "typing", is_typing: false })
+      );
+    }, 1200);
+  };
+
 
   const sendMessage = () => {
     if (!text.trim() || !me) return;
 
-    const tempId = `temp-${Date.now()}`;
-
     setMessages((prev) => [
       ...prev,
       {
-        id: tempId,
+        id: `temp-${Date.now()}`,
         sender_id: me.id,
         content: text,
         created_at: new Date().toISOString(),
@@ -191,11 +251,13 @@ export default function ChatRoomPage() {
       },
     ]);
 
-    socketRef.current?.send(JSON.stringify({ content: text }));
+    socketRef.current?.send(
+      JSON.stringify({ type: "message", content: text })
+    );
+
     setText("");
   };
 
-  /* ================= HELPERS ================= */
 
   const lastMyMessageId = useMemo(
     () =>
@@ -215,12 +277,10 @@ export default function ChatRoomPage() {
     return map;
   }, [messages]);
 
-  /* ================= UI ================= */
 
   return (
-    <div className="flex flex-col h-screen bg-background-light dark:bg-background-dark text-slate-900 dark:text-white">
+    <div className="flex flex-col h-screen bg-background-light dark:bg-background-dark">
 
-      {/* HEADER */}
       <header className="sticky top-0 z-50 flex items-center gap-3 px-4 py-3 border-b backdrop-blur">
         <button onClick={() => router.back()}>
           <FiArrowLeft />
@@ -229,18 +289,40 @@ export default function ChatRoomPage() {
         {otherUser && (
           <>
             <div
-              className="w-10 h-10 rounded-full bg-cover bg-center border"
+              className="w-10 h-10 rounded-full bg-cover bg-center border relative"
               style={{ backgroundImage: `url(${otherUser.avatar})` }}
-            />
+            >
+              {online && (
+                <span className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-green-500 border-2 border-white rounded-full" />
+              )}
+            </div>
+
             <div>
               <h2 className="text-sm font-bold">{otherUser.name}</h2>
-              <p className="text-xs text-slate-500">Chat</p>
+
+              <AnimatePresence>
+                {typing ? (
+                  <motion.p
+                    initial={{ opacity: 0, y: 4 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: 4 }}
+                    className="text-xs text-primary italic"
+                  >
+                    typing…
+                  </motion.p>
+                ) : online ? (
+                  <p className="text-xs text-green-500">online</p>
+                ) : (
+                  <p className="text-xs text-slate-500">
+                    {formatLastSeen(lastSeen)}
+                  </p>
+                )}
+              </AnimatePresence>
             </div>
           </>
         )}
       </header>
 
-      {/* MESSAGES */}
       <main className="flex-1 overflow-y-auto p-4 space-y-6 pb-28">
         {Object.entries(groupedMessages).map(([date, msgs]) => (
           <div key={date} className="space-y-4">
@@ -250,64 +332,67 @@ export default function ChatRoomPage() {
               </span>
             </div>
 
-            <AnimatePresence>
-              {msgs.map((msg) => {
-                const isMe = msg.sender_id === me?.id;
-                const showSeen =
-                  isMe &&
-                  msg.id === lastMyMessageId &&
-                  msg.seen_at;
+            {msgs.map((msg) => {
+              const isMe = msg.sender_id === me?.id;
+              const showSeen =
+                isMe &&
+                msg.id === lastMyMessageId &&
+                msg.seen_at;
 
-                return (
-                  <motion.div
-                    key={msg.id}
-                    initial={{ opacity: 0, y: 6 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    className={`flex gap-3 max-w-[85%] ${
-                      isMe ? "ml-auto justify-end" : ""
+              return (
+                <motion.div
+                  key={msg.id}
+                  initial={{ opacity: 0, y: 6 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className={`flex gap-3 max-w-[85%] ${
+                    isMe ? "ml-auto justify-end" : ""
+                  }`}
+                >
+                  {!isMe && otherUser && (
+                    <div
+                      className="w-8 h-8 rounded-full bg-cover bg-center border"
+                      style={{ backgroundImage: `url(${otherUser.avatar})` }}
+                    />
+                  )}
+
+                  <div
+                    className={`flex flex-col gap-1 ${
+                      isMe ? "items-end" : "items-start"
                     }`}
                   >
-                    {!isMe && otherUser && (
-                      <div
-                        className="w-8 h-8 rounded-full bg-cover bg-center border"
-                        style={{ backgroundImage: `url(${otherUser.avatar})` }}
-                      />
-                    )}
-
                     <div
-                      className={`flex flex-col gap-1 ${
-                        isMe ? "items-end" : "items-start"
+                      className={`px-4 py-3 text-sm rounded-2xl
+                      ${
+                        isMe
+                          ? "bg-primary text-white rounded-br-none"
+                          : "bg-white dark:bg-[#233648] rounded-bl-none"
                       }`}
                     >
-                      <div
-                        className={`px-4 py-3 text-sm rounded-2xl
-                        ${
-                          isMe
-                            ? "bg-primary text-white rounded-br-none"
-                            : "bg-white dark:bg-[#233648] rounded-bl-none"
-                        }`}
-                      >
-                        {msg.content}
-                      </div>
-
-                      <div className="flex items-center gap-1 text-[11px] text-slate-400">
-                        {formatTime(msg.created_at)}
-                        {msg.optimistic && <span className="italic">Sending…</span>}
-                        {showSeen && <span className="text-primary font-medium">Seen</span>}
-                      </div>
+                      {msg.content}
                     </div>
-                  </motion.div>
-                );
-              })}
-            </AnimatePresence>
+
+                    <div className="flex items-center gap-1 text-[11px] text-slate-400">
+                      {formatTime(msg.created_at)}
+                      {msg.optimistic && (
+                        <span className="italic">Sending…</span>
+                      )}
+                      {showSeen && (
+                        <span className="text-primary font-medium">
+                          Seen
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </motion.div>
+              );
+            })}
           </div>
         ))}
 
         <div ref={bottomRef} />
       </main>
 
-      {/* FOOTER */}
-      <footer className="fixed bottom-0 left-0 w-full p-4 bg-background-light/90 dark:bg-background-dark/90 backdrop-blur border-t">
+      <footer className="fixed bottom-0 left-0 w-full p-4 backdrop-blur border-t bg-background-light/90 dark:bg-background-dark/90">
         <div className="flex items-center gap-3 max-w-screen-xl mx-auto">
 
           <button className="text-slate-500">
@@ -317,10 +402,13 @@ export default function ChatRoomPage() {
           <div className="flex-1 flex items-center bg-slate-100 dark:bg-slate-800 rounded-2xl px-4 py-2">
             <textarea
               value={text}
-              onChange={(e) => setText(e.target.value)}
+              onChange={(e) => {
+                setText(e.target.value);
+                emitTyping();
+              }}
               rows={1}
               placeholder="Type a message..."
-              className="w-full bg-transparent text-slate-900 dark:text-white placeholder-slate-400 resize-none py-1 focus:outline-none"
+              className="w-full bg-transparent resize-none focus:outline-none"
             />
           </div>
 

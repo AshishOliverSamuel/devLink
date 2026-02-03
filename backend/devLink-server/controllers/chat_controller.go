@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"os"
 	"strings"
 
 	"time"
@@ -11,6 +12,7 @@ import (
 	"github.com/ayushmehta03/devLink-backend/database"
 	"github.com/ayushmehta03/devLink-backend/models"
 	"github.com/gin-gonic/gin"
+	"github.com/golang-jwt/jwt/v5"
 	"go.mongodb.org/mongo-driver/v2/bson"
 	"go.mongodb.org/mongo-driver/v2/mongo"
 	"go.mongodb.org/mongo-driver/v2/mongo/options"
@@ -594,3 +596,28 @@ func GetChatRooms(client *mongo.Client) gin.HandlerFunc {
 		c.JSON(http.StatusOK, gin.H{"rooms": rooms})
 	}
 }
+
+func GetWSToken() gin.HandlerFunc {
+
+	return func(c *gin.Context) {
+		userId, ok := c.Get("user_id") 
+		if !ok {
+			c.JSON(401, gin.H{"error": "unauthorized"})
+			return
+		}
+
+		secret := os.Getenv("JWT_SECRET")
+
+		claims := jwt.MapClaims{
+			"user_id": userId.(string),
+			"exp":     time.Now().Add(2 * time.Minute).Unix(), 
+			"type":    "ws",
+		}
+
+		token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+		signed, _ := token.SignedString([]byte(secret))
+
+		c.JSON(200, gin.H{"token": signed})
+	}
+}
+
