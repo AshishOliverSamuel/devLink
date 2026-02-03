@@ -441,6 +441,7 @@ func GetMe(client *mongo.Client) gin.HandlerFunc {
 			"email":         user.Email,
 			"profile_image": user.ProfileImage,
 			"role":          user.Role,
+			"last_seen":user.LastSeen,
 			"created_at":    user.CreatedAt,
 		})
 	}

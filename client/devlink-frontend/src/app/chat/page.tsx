@@ -5,7 +5,6 @@ import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { apiFetch } from "@/lib/api";
 
-/* ================= TYPES ================= */
 
 type User = {
   id: string;
@@ -17,7 +16,9 @@ type ChatRoom = {
   room_id: string;
   user: User;
   last_message?: string;
-  updated_at: string;
+  last_sender_id?: string;
+  last_seen_at?: string | null;
+  updated_at?: string;
   unread: number;
 };
 
@@ -25,7 +26,9 @@ type RawRoom = {
   room_id: string;
   user_id: string;
   last_message?: string;
-  updated_at: string;
+  last_sender_id?: string;
+  last_seen_at?: string | null;
+  updated_at?: string;
   unread: number;
 };
 
@@ -39,7 +42,16 @@ type Request = RawRequest & {
   sender?: User;
 };
 
-/* ================= PAGE ================= */
+/* ================= HELPERS ================= */
+
+const formatTime = (date?: string) => {
+  if (!date) return "";
+  return new Date(date).toLocaleTimeString([], {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+};
+
 
 export default function ChatsPage() {
   const router = useRouter();
@@ -49,6 +61,7 @@ export default function ChatsPage() {
   const [requests, setRequests] = useState<Request[]>([]);
   const [counts, setCounts] = useState({ requests: 0, unread: 0 });
   const [loading, setLoading] = useState(true);
+
 
   const loadCounts = () => {
     apiFetch("/chat/counts")
@@ -65,6 +78,7 @@ export default function ChatsPage() {
     loadCounts();
   }, []);
 
+
   useEffect(() => {
     setLoading(true);
 
@@ -76,9 +90,12 @@ export default function ChatsPage() {
           const hydrated = await Promise.all(
             raw.map(async (r) => {
               const u = await apiFetch(`/users/${r.user_id}`);
+
               return {
                 room_id: r.room_id,
                 last_message: r.last_message,
+                last_sender_id: r.last_sender_id,
+                last_seen_at: r.last_seen_at,
                 updated_at: r.updated_at,
                 unread: r.unread,
                 user: {
@@ -128,28 +145,45 @@ export default function ChatsPage() {
       });
   }, [tab]);
 
-  // Helper to format time (HH:MM)
-  const formatTime = (dateStr: string) => {
-    const date = new Date(dateStr);
-    return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
+
+  const respond = async (id: string, action: "accept" | "reject") => {
+    await apiFetch(`/chat/request/${id}/respond`, {
+      method: "POST",
+      body: JSON.stringify({ action }),
+    });
+
+    setRequests((prev) => prev.filter((r) => r.id !== id));
+    setCounts((c) => ({ ...c, requests: Math.max(0, c.requests - 1) }));
+
+    if (action === "accept") setTab("inbox");
   };
+
+  const totalNotifications = counts.requests + counts.unread;
+
 
   return (
     <main className="min-h-screen bg-[#101922] text-white flex justify-center">
       <div className="w-full max-w-xl">
+
         <header className="sticky top-0 z-40 bg-[#101922]/90 backdrop-blur border-b border-slate-800">
           <div className="flex items-center justify-between p-4">
             <button onClick={() => router.back()}>←</button>
             <h1 className="font-bold text-lg">Chats</h1>
+
             <div className="relative">
               <AnimatePresence>
-                {counts.unread + counts.requests > 0 && (
+                {totalNotifications > 0 && (
                   <motion.div
-                    initial={{ scale: 0 }}
-                    animate={{ scale: [0.8, 1.15, 1] }}
-                    className="absolute -top-2 -right-2 min-w-[20px] h-[20px] rounded-full bg-primary text-xs font-bold flex items-center justify-center px-1"
+                    key={totalNotifications}
+                    initial={{ scale: 0, opacity: 0 }}
+                    animate={{ scale: [0.8, 1.15, 1], opacity: 1 }}
+                    exit={{ scale: 0, opacity: 0 }}
+                    transition={{ duration: 0.35 }}
+                    className="absolute -top-2 -right-2 min-w-[20px] h-[20px]
+                               rounded-full bg-primary text-xs font-bold
+                               flex items-center justify-center px-1"
                   >
-                    {counts.unread + counts.requests}
+                    {totalNotifications}
                   </motion.div>
                 )}
               </AnimatePresence>
@@ -157,87 +191,164 @@ export default function ChatsPage() {
           </div>
 
           <div className="flex border-b border-slate-800">
-            <Tab active={tab === "inbox"} onClick={() => setTab("inbox")}>Inbox</Tab>
-            <Tab active={tab === "requests"} onClick={() => setTab("requests")}>Requests</Tab>
+            <Tab active={tab === "inbox"} onClick={() => setTab("inbox")}>
+              Inbox
+            </Tab>
+            <Tab active={tab === "requests"} onClick={() => setTab("requests")}>
+              Requests
+            </Tab>
           </div>
         </header>
 
         <div className="p-4 space-y-4">
+
           {loading && (
             <>
+              <Skeleton />
               <Skeleton />
               <Skeleton />
             </>
           )}
 
-          {!loading && tab === "inbox" && rooms.map((r) => {
-            // Logic for status icons
-            const hasUnreadFromOther = r.unread > 0;
-            const sentByMe = r.unread === 0; // Assuming 0 unread means you've seen theirs or yours was last
+          {!loading && tab === "inbox" && rooms.length === 0 && (
+            <p className="text-slate-400 text-center mt-10">
+              No conversations yet
+            </p>
+          )}
 
-            return (
-              <motion.div
-                key={r.room_id}
-                whileHover={{ scale: 1.01 }}
-                onClick={() => router.push(`/chat/${r.room_id}`)}
-                className="cursor-pointer bg-[#192633] border border-slate-800 rounded-xl p-4 flex gap-4 items-center"
-              >
-                <img
-                  src={r.user.profile_image || `https://api.dicebear.com/7.x/initials/svg?seed=${r.user.username}`}
-                  className="w-14 h-14 rounded-full border border-slate-700 object-cover"
-                />
+          {!loading && tab === "inbox" &&
+            rooms.map((r) => {
+              const hasUnread = r.unread > 0;
+              const sentByMe = r.last_sender_id !== r.user.id;
+              const myMsgSeen = sentByMe && r.last_seen_at;
 
-                <div className="flex-1 min-w-0">
-                  <div className="flex justify-between items-center mb-1">
-                    <p className="font-bold truncate text-slate-100">@{r.user.username}</p>
-                    <span className="text-[10px] text-slate-500">
-                       {formatTime(r.updated_at)}
-                    </span>
-                  </div>
+              return (
+                <motion.div
+                  key={r.room_id}
+                  whileHover={{ scale: 1.01 }}
+                  onClick={() => router.push(`/chat/${r.room_id}`)}
+                  className="cursor-pointer bg-[#192633] border border-slate-800 rounded-xl p-4 flex gap-4"
+                >
+                  <img
+                    src={
+                      r.user.profile_image ||
+                      `https://api.dicebear.com/7.x/initials/svg?seed=${r.user.username}`
+                    }
+                    className="w-14 h-14 rounded-full border border-slate-700 object-cover"
+                  />
 
-                  <div className="flex items-center justify-between gap-2">
-                    <div className="flex items-center gap-1 min-w-0">
-                      {/* Double Tick: Sent by me and seen */}
-                      {sentByMe && (
-                        <span className="text-primary text-xs shrink-0">✓✓</span>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center justify-between">
+                      <p className="font-bold truncate">@{r.user.username}</p>
+
+                      {!sentByMe && hasUnread && (
+                        <span className="w-2.5 h-2.5 rounded-full bg-primary" />
                       )}
-                      
-                      <p className="text-sm text-[#92adc9] truncate">
-                        {r.last_message || "Say hello 👋"}
-                      </p>
                     </div>
 
-                    {/* Blue Dot: Sent by other and NOT read by me */}
-                    {hasUnreadFromOther && (
-                      <div className="w-2.5 h-2.5 rounded-full bg-primary shrink-0" />
-                    )}
+                    <div className="flex items-center gap-1 text-sm text-[#92adc9] truncate">
+                      {sentByMe && (
+                        <span className="font-semibold text-slate-300 ">
+                          You
+                        </span>
+                      )}
+
+                      <span className="truncate">
+                        {r.last_message || "Say hello..."}
+                      </span>
+
+                      {myMsgSeen && (
+                        <span className="ml-1 text-primary text-xs">✓✓</span>
+                      )}
+                    </div>
+
+                    <p className="text-xs text-slate-500 mt-1">
+                      {formatTime(r.updated_at)}
+                    </p>
+                  </div>
+
+                  {hasUnread && (
+                    <div className="ml-2 min-w-[22px] h-[22px] rounded-full bg-primary text-xs font-bold flex items-center justify-center">
+                      {r.unread}
+                    </div>
+                  )}
+                </motion.div>
+              );
+            })}
+
+          {!loading && tab === "requests" && requests.length === 0 && (
+            <p className="text-slate-400 text-center mt-10">
+              No pending requests
+            </p>
+          )}
+
+          {!loading && tab === "requests" &&
+            requests.map((r) => (
+              <motion.div
+                key={r.id}
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="bg-[#192633] border border-slate-800 rounded-xl p-4"
+              >
+                <div className="flex gap-4">
+                  <img
+                    onClick={() => router.push(`/users/${r.sender?.id}`)}
+                    src={
+                      r.sender?.profile_image ||
+                      `https://api.dicebear.com/7.x/initials/svg?seed=${r.sender?.username}`
+                    }
+                    className="w-14 h-14 rounded-full border border-primary/40 cursor-pointer"
+                  />
+
+                  <div className="flex-1">
+                    <p className="font-bold">@{r.sender?.username}</p>
+                    <p className="text-sm text-[#92adc9] italic">
+                      “{r.msg}”
+                    </p>
                   </div>
                 </div>
-              </motion.div>
-            );
-          })}
 
-          {!loading && tab === "requests" && requests.map((r) => (
-            <motion.div key={r.id} className="bg-[#192633] border border-slate-800 rounded-xl p-4 flex gap-4">
-               <img
-                src={r.sender?.profile_image || `https://api.dicebear.com/7.x/initials/svg?seed=${r.sender?.username}`}
-                className="w-14 h-14 rounded-full border border-primary/40"
-              />
-              <div className="flex-1">
-                <p className="font-bold">@{r.sender?.username}</p>
-                <p className="text-sm text-[#92adc9] italic">“{r.msg}”</p>
-              </div>
-            </motion.div>
-          ))}
+                <div className="flex gap-3 mt-4">
+                  <button
+                    onClick={() => respond(r.id, "reject")}
+                    className="flex-1 h-10 rounded-lg bg-slate-700"
+                  >
+                    Decline
+                  </button>
+                  <button
+                    onClick={() => respond(r.id, "accept")}
+                    className="flex-1 h-10 rounded-lg bg-primary"
+                  >
+                    Accept
+                  </button>
+                </div>
+              </motion.div>
+            ))}
         </div>
       </div>
     </main>
   );
 }
 
-function Tab({ children, active, onClick }: { children: string; active: boolean; onClick: () => void; }) {
+
+function Tab({
+  children,
+  active,
+  onClick,
+}: {
+  children: string;
+  active: boolean;
+  onClick: () => void;
+}) {
   return (
-    <button onClick={onClick} className={`flex-1 py-3 text-sm font-bold ${active ? "border-b-2 border-primary text-primary" : "text-slate-400 hover:text-slate-200"}`}>
+    <button
+      onClick={onClick}
+      className={`flex-1 py-3 text-sm font-bold ${
+        active
+          ? "border-b-2 border-primary text-primary"
+          : "text-slate-400 hover:text-slate-200"
+      }`}
+    >
       {children}
     </button>
   );

@@ -514,71 +514,83 @@ func GetChatCounts(client *mongo.Client) gin.HandlerFunc {
 	}
 }
 func GetChatRooms(client *mongo.Client) gin.HandlerFunc {
-    return func(c *gin.Context) {
-        userId, ok := c.Get("user_id")
-        if !ok {
-            c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
-            return
-        }
+	return func(c *gin.Context) {
+		userId, ok := c.Get("user_id")
+		if !ok {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+			return
+		}
 
-        uid, _ := bson.ObjectIDFromHex(userId.(string))
+		uid, err := bson.ObjectIDFromHex(userId.(string))
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid user id"})
+			return
+		}
 
-        ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-        defer cancel()
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
 
-        roomCol := database.OpenCollection("chat_rooms", client)
-        msgCol := database.OpenCollection("messages", client)
+		roomCol := database.OpenCollection("chat_rooms", client)
+		msgCol := database.OpenCollection("messages", client)
 
-        cursor, err := roomCol.Find(ctx, bson.M{
-            "participants": uid,
-        })
-        if err != nil {
-            c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch rooms"})
-            return
-        }
-        defer cursor.Close(ctx)
+		cursor, err := roomCol.Find(ctx, bson.M{
+			"participants": uid,
+		})
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch rooms"})
+			return
+		}
+		defer cursor.Close(ctx)
 
-        var rooms []gin.H
+		var rooms []gin.H
 
-        for cursor.Next(ctx) {
-            var room models.ChatRoom
-            if err := cursor.Decode(&room); err != nil {
-                continue
-            }
-
-            var other bson.ObjectID
-            for _, p := range room.Participants {
-                if p != uid {
-                    other = p
-                }
-            }
-
-            var lastMsg models.Message
-            err := msgCol.FindOne(
-                ctx,
-                bson.M{"room_id": room.ID},
-                options.FindOne().SetSort(bson.M{"created_at": -1}),
-            ).Decode(&lastMsg)
-			if err!=nil{
-				c.JSON(http.StatusBadRequest,gin.H{"error":"Unable to fetch messages"})
+		for cursor.Next(ctx) {
+			var room models.ChatRoom
+			if err := cursor.Decode(&room); err != nil {
+				continue
 			}
 
-            unreadCount, _ := msgCol.CountDocuments(ctx, bson.M{
-                "room_id":   room.ID,
-                "sender_id": other,
-                "seen_at":   nil,
-            })
+			var other bson.ObjectID
+			for _, p := range room.Participants {
+				if p != uid {
+					other = p
+					break
+				}
+			}
 
-            rooms = append(rooms, gin.H{
-                "room_id":      room.ID.Hex(),
-                "user_id":      other.Hex(),
-                "last_message": lastMsg.Content,
-                "last_sender":  lastMsg.SenderID.Hex(), 
-                "updated_at":   room.CreatedAt,        
-                "unread":       unreadCount,           
-            })
-        }
+			var lastMsg models.Message
+			err := msgCol.FindOne(
+				ctx,
+				bson.M{"room_id": room.ID},
+				options.FindOne().SetSort(bson.M{"created_at": -1}),
+			).Decode(&lastMsg)
 
-        c.JSON(http.StatusOK, gin.H{"rooms": rooms})
-    }
+			if err != nil {
+				rooms = append(rooms, gin.H{
+					"room_id": room.ID.Hex(),
+					"user_id": other.Hex(),
+					"unread":  0,
+				})
+				continue
+			}
+
+			unreadCount, _ := msgCol.CountDocuments(ctx, bson.M{
+				"room_id":   room.ID,
+				"sender_id": other,
+				"seen_at":   nil,
+			})
+
+			rooms = append(rooms, gin.H{
+				"room_id":          room.ID.Hex(),
+				"user_id":          other.Hex(),
+				"last_message":     lastMsg.Content,
+				"last_sender_id":   lastMsg.SenderID.Hex(),
+				"last_seen_at":     lastMsg.Seen,
+				"updated_at":       lastMsg.CreatedAt,
+				"unread":           unreadCount,
+			})
+		}
+
+		c.JSON(http.StatusOK, gin.H{"rooms": rooms})
+	}
 }
