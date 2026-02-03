@@ -33,6 +33,7 @@ protected.GET("/users/suggested", controllers.GetSuggestedUsers(client))
 protected.GET("/chat/request/status/:userId",controllers.GetChatRequestStatus(client))
 protected.GET("/chat/counts",controllers.GetChatCounts(client))
 protected.GET("/chatrooms", controllers.GetChatRooms(client))
+protected.GET("/ws/token", controllers.GetWSToken())
 
 
 }

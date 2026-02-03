@@ -64,11 +64,22 @@ func ChatWebSocket(client *mongo.Client) gin.HandlerFunc {
 		}
 
 		claims := token.Claims.(jwt.MapClaims)
+
+		if claims["type"] != "ws" {
+	conn.Close()
+	return
+}
+
+
 		userID, err := bson.ObjectIDFromHex(claims["user_id"].(string))
 		if err != nil {
 			conn.Close()
 			return
 		}
+
+
+
+
 
 		roomIDParam := c.Param("room_id")
 		roomID, err := bson.ObjectIDFromHex(roomIDParam)
