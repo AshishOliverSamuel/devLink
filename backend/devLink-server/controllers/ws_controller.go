@@ -2,7 +2,7 @@ package controllers
 
 import (
 	"context"
-	"fmt"
+	
 	"net/http"
 	"os"
 	"time"
@@ -27,119 +27,101 @@ var upgarder=websocket.Upgrader{
 
 var roomClients=make(map[string]map[*websocket.Conn]bool)
 
-func ChatWebSocket(client *mongo.Client)gin.HandlerFunc{
-	return func(c *gin.Context){
-		tokenString,err:=c.Cookie("access_token")
+func ChatWebSocket(client *mongo.Client) gin.HandlerFunc {
+	return func(c *gin.Context) {
 
-		if err!=nil{
-			c.JSON(http.StatusUnauthorized,gin.H{"error":"Unauthorized"})
-			return 
+		conn, err := upgarder.Upgrade(c.Writer, c.Request, nil)
+		if err != nil {
+			return
 		}
 
+		tokenString, err := c.Request.Cookie("access_token")
+		if err != nil {
+			conn.Close()
+			return
+		}
 
-		secret:=os.Getenv("JWT_SECRET")
+		secret := os.Getenv("JWT_SECRET")
 
-
-		token,err:=jwt.Parse(tokenString,func(token *jwt.Token)(interface{},error){
-			return []byte(secret),nil
+		token, err := jwt.Parse(tokenString.Value, func(token *jwt.Token) (interface{}, error) {
+			return []byte(secret), nil
 		})
 
-		if err!=nil{
-			fmt.Println("Invalid token")
-			c.JSON(http.StatusUnauthorized,gin.H{"error":"Invalid token"});
-			return 
+		if err != nil || !token.Valid {
+			conn.Close()
+			return
 		}
 
-		claims:=token.Claims.(jwt.MapClaims)
+		claims := token.Claims.(jwt.MapClaims)
+		userId, _ := bson.ObjectIDFromHex(claims["user_id"].(string))
 
-		userId,_:=bson.ObjectIDFromHex(claims["user_id"].(string))
-
-		roomIDParam:=c.Param("room_id");
-
-		roomID,err:=bson.ObjectIDFromHex(roomIDParam)
-
-
-		if err!=nil{
-			c.JSON(http.StatusBadRequest,gin.H{"error":"Invalid room id"});
-			fmt.Println("Invalid room id")
-			return 
+		roomIDParam := c.Param("room_id")
+		roomID, err := bson.ObjectIDFromHex(roomIDParam)
+		if err != nil {
+			conn.Close()
+			return
 		}
 
+		roomCol := database.OpenCollection("chat_rooms", client)
+		count, _ := roomCol.CountDocuments(
+			context.Background(),
+			bson.M{
+				"_id":          roomID,
+				"participants": userId,
+			},
+		)
 
-		roomCol:=database.OpenCollection("chat_rooms",client)
-
-		count,_:=roomCol.CountDocuments(context.Background(),bson.M{
-			"_id":roomID,
-			"participants":userId,
-		})
-
-		if count==0{
-			fmt.Println("not avilable")
-			c.JSON(http.StatusForbidden,gin.H{"error":"Not allowed"})
-			return 
+		if count == 0 {
+			conn.Close()
+			return
 		}
 
-
-		con,err:=upgarder.Upgrade(c.Writer,c.Request,nil)
-
-		if err!=nil{
-			return 
+		roomKey := roomID.Hex()
+		if roomClients[roomKey] == nil {
+			roomClients[roomKey] = make(map[*websocket.Conn]bool)
 		}
+		roomClients[roomKey][conn] = true
 
+		defer func() {
+			delete(roomClients[roomKey], conn)
+			conn.Close()
+		}()
 
-		for{
-			var msg struct{
+		for {
+			var msg struct {
 				Content string `json:"content"`
 			}
 
-			err:=con.ReadJSON(&msg)
-
-			if err!=nil{
+			err := conn.ReadJSON(&msg)
+			if err != nil {
 				break
 			}
 
-			roomKey:=roomID.Hex()
-
-		if roomClients[roomKey]==nil{
-			roomClients[roomKey]=make(map[*websocket.Conn]bool)
-		}
-		roomClients[roomKey][con]=true
-
-
-			response := gin.H{
-	"room_id": roomKey,
-	"sender":  userId.Hex(),
-	"content": msg.Content,
-}
-
-for clientConn := range roomClients[roomKey] {
-	err := clientConn.WriteJSON(response)
-	if err != nil {
-		clientConn.Close()
-		delete(roomClients[roomKey], clientConn)
-	}
-}
-
-
-
-			msgCol:=database.OpenCollection("messages",client)
-
-			message:=models.Message{
-				ID:bson.NewObjectID(),
-				RoomID: roomID,
-				SenderID: userId,
-				Content: msg.Content,
+			msgCol := database.OpenCollection("messages", client)
+			message := models.Message{
+				ID:        bson.NewObjectID(),
+				RoomID:    roomID,
+				SenderID:  userId,
+				Content:   msg.Content,
 				CreatedAt: time.Now(),
 			}
+			msgCol.InsertOne(context.Background(), message)
 
+			response := gin.H{
+				"id":         message.ID.Hex(),
+				"room_id":    roomKey,
+				"sender_id":  userId.Hex(),
+				"content":    msg.Content,
+				"created_at": message.CreatedAt,
+			}
 
-			_,err=msgCol.InsertOne(context.Background(),message)
-			if err!=nil{
-				fmt.Println("WS: Failed to save message")
+			for clientConn := range roomClients[roomKey] {
+				err := clientConn.WriteJSON(response)
+				if err != nil {
+					clientConn.Close()
+					delete(roomClients[roomKey], clientConn)
+				}
 			}
 		}
-
-		
-
 	}
 }
