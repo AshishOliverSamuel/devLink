@@ -140,36 +140,56 @@ func GetTrendingPosts(client *mongo.Client) gin.HandlerFunc {
 
 
 func CreatePost(client *mongo.Client) gin.HandlerFunc {
-	return func(c *gin.Context) {
-		userId, exists := c.Get("user_id")
-		if !exists {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
-			return
-		}
+    return func(c *gin.Context) {
+        userId, exists := c.Get("user_id")
+        if !exists {
+            c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+            return
+        }
 
-		var post models.Post
-		if err := c.ShouldBindJSON(&post); err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid input"})
-			return
-		}
+        var post models.Post
+        if err := c.ShouldBindJSON(&post); err != nil {
+            c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid input"})
+            return
+        }
 
-		post.ID = bson.NewObjectID()
-		post.AuthorID, _ = bson.ObjectIDFromHex(userId.(string))
-		post.Slug = GenerateUniqueSlug(post.Title)
-		post.ViewCount = 0
-		post.CreatedAt = time.Now()
-		post.UpdatedAt = time.Now()
+        ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+        defer cancel()
 
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-		defer cancel()
+        authorObjId, err := bson.ObjectIDFromHex(userId.(string))
+        if err != nil {
+            c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid user ID format"})
+            return
+        }
 
-		if _, err := database.OpenCollection("posts", client).InsertOne(ctx, post); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create post"})
-			return
-		}
+        var user models.User
+        userCol := database.OpenCollection("users", client)
+        if err := userCol.FindOne(ctx, bson.M{"_id": authorObjId}).Decode(&user); err != nil {
+            c.JSON(http.StatusInternalServerError, gin.H{"error": "User not found"})
+            return
+        }
 
-		c.JSON(http.StatusCreated, gin.H{"message": "Post created successfully"})
-	}
+        post.ID = bson.NewObjectID()
+        post.AuthorID = authorObjId
+        post.Slug = GenerateUniqueSlug(post.Title)
+        post.ViewCount = 0
+        post.CreatedAt = time.Now()
+        post.UpdatedAt = time.Now()
+
+        if _, err := database.OpenCollection("posts", client).InsertOne(ctx, post); err != nil {
+            c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create post"})
+            return
+        }
+
+        c.JSON(http.StatusCreated, PostResponse{
+            Post: post,
+            Author: PostAuthor{
+                ID:           user.Id,
+                Username:     user.UserName,
+                ProfileImage: user.ProfileImage,
+            },
+        })
+    }
 }
 
 
