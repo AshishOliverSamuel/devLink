@@ -8,7 +8,12 @@ import toast from "react-hot-toast";
 import { apiFetch } from "@/lib/api";
 import { FiArrowLeft, FiShare2 } from "react-icons/fi";
 import { Card, CardContent } from "@/components/ui/card";
-import AppFooter from "@/components/ui/AppFooter";
+
+type Author = {
+  id: string;
+  username: string;
+  profile_image?: string;
+};
 
 type Post = {
   id: string;
@@ -17,9 +22,9 @@ type Post = {
   content: string;
   tags?: string[];
   image_url?: string;
-  author_id: string;
   created_at: string;
   view_count: number;
+  author: Author;
 };
 
 const formatDate = (date: string) =>
@@ -120,6 +125,7 @@ export default function PostPage() {
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.25 }}
         >
+          {/* COVER IMAGE */}
           {isValidImage(post.image_url) && (
             <Card className="mb-10 bg-[#020617] border-white/10 overflow-hidden">
               <CardContent className="p-0">
@@ -129,11 +135,6 @@ export default function PostPage() {
                     alt={post.title}
                     fill
                     priority
-                    sizes="
-                      (max-width: 640px) 100vw,
-                      (max-width: 1200px) 100vw,
-                      1200px
-                    "
                     className="object-cover"
                   />
                 </div>
@@ -142,18 +143,37 @@ export default function PostPage() {
           )}
 
           <div className="max-w-3xl">
+            {/* TITLE */}
             <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold tracking-tight mb-4">
               {post.title}
             </h1>
 
-            <div className="text-sm text-slate-400 mb-6 flex flex-wrap gap-2">
-              <span>{formatDate(post.created_at)}</span>
-              <span>•</span>
-              <span>{getReadTime(post.content)}</span>
-              <span>•</span>
-              <span>{post.view_count} views</span>
+            {/* AUTHOR COMPONENT WITH INCREASED MARGIN (mb-10) */}
+            <div className="flex items-center gap-3 mb-10">
+              <img
+                src={
+                  post.author.profile_image ||
+                  `https://api.dicebear.com/7.x/initials/svg?seed=${post.author.username}`
+                }
+                onClick={() => router.push(`/users/${post.author.id}`)}
+                className="w-10 h-10 rounded-full object-cover border border-white/10 cursor-pointer"
+              />
+
+              <div className="text-sm">
+                <p
+                  onClick={() => router.push(`/users/${post.author.id}`)}
+                  className="font-medium cursor-pointer hover:text-blue-400"
+                >
+                  @{post.author.username}
+                </p>
+                <p className="text-slate-400 text-xs">
+                  {formatDate(post.created_at)} • {getReadTime(post.content)} •{" "}
+                  {post.view_count} views
+                </p>
+              </div>
             </div>
 
+            {/* TAGS */}
             {post.tags?.length && (
               <div className="flex flex-wrap gap-2 mb-8">
                 {post.tags.map((tag) => (
@@ -167,10 +187,12 @@ export default function PostPage() {
               </div>
             )}
 
+            {/* CONTENT */}
             <div className="text-slate-300 leading-relaxed space-y-4 whitespace-pre-line">
               {post.content}
             </div>
 
+            {/* SUGGESTED */}
             {suggested.length > 0 && (
               <section className="mt-24 pt-10 border-t border-white/5">
                 <h3 className="text-lg font-semibold mb-6">

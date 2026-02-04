@@ -10,6 +10,7 @@ import { motion } from "framer-motion";
 type User = {
   name: string;
   bio?: string;
+  
 };
 
 type Post = {
@@ -142,7 +143,6 @@ export default function UserProfilePage() {
 
           <p className="text-2xl font-bold text-white">@{user.name}</p>
 
-          {/* ✅ ONLY FIX IS HERE */}
           {!isOwnProfile && renderChatCTA()}
 
           {user.bio && (
