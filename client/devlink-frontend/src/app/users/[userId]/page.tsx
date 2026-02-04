@@ -7,10 +7,12 @@ import { apiFetch } from "@/lib/api";
 import { FiMessageCircle, FiClock } from "react-icons/fi";
 import { motion } from "framer-motion";
 
+
 type User = {
+  id?: string;
   name: string;
   bio?: string;
-  
+  profile_image?: string; // ✅ FIX
 };
 
 type Post = {
@@ -32,6 +34,7 @@ type ChatStatus =
   | { status: "pending"; type: "sent" | "received" }
   | { status: "accepted"; room_id?: string };
 
+
 const formatDate = (d: string) =>
   new Date(d).toLocaleDateString("en-US", {
     month: "short",
@@ -41,6 +44,7 @@ const formatDate = (d: string) =>
 
 const readTime = (t: string) =>
   `${Math.max(1, Math.ceil(t.split(" ").length / 200))} min read`;
+
 
 export default function UserProfilePage() {
   const params = useParams();
@@ -57,16 +61,17 @@ export default function UserProfilePage() {
   const [chatStatus, setChatStatus] = useState<ChatStatus | null>(null);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
 
+
   useEffect(() => {
     if (!userId) return;
 
     Promise.all([
-      apiFetch("/auth/me").catch(() => null),
+      apiFetch("/auth/me").catch(() => null), 
       apiFetch(`/users/${userId}`),
       apiFetch(`/users/${userId}/stats`),
       apiFetch(`/chat/request/status/${userId}`),
     ]).then(([me, profile, stats, status]) => {
-      setCurrentUserId(me?.user?.id ?? null);
+      setCurrentUserId(me?.id ?? null);
       setUser(profile.user);
       setPosts(profile.posts || []);
       setStats(stats);
@@ -84,6 +89,11 @@ export default function UserProfilePage() {
 
   const isOwnProfile =
     currentUserId !== null && currentUserId === userId;
+
+  const avatarUrl =
+    user.profile_image ||
+    `https://api.dicebear.com/7.x/initials/svg?seed=${user.name}`;
+
 
   const renderChatCTA = () => {
     if (chatStatus.status === "accepted") {
@@ -122,10 +132,10 @@ export default function UserProfilePage() {
     );
   };
 
+
   return (
     <main className="min-h-screen bg-[#101922] px-3 py-6 flex justify-center">
       <div className="w-full max-w-6xl">
-
         <div className="flex items-center mb-6">
           <button onClick={() => router.back()} className="mr-4 text-white">
             ←
@@ -136,9 +146,7 @@ export default function UserProfilePage() {
         <div className="flex flex-col items-center text-center gap-3 mb-6">
           <div
             className="w-32 h-32 rounded-full border-4 border-blue-500 bg-cover bg-center"
-            style={{
-              backgroundImage: `url(https://api.dicebear.com/7.x/initials/svg?seed=${user.name})`,
-            }}
+            style={{ backgroundImage: `url(${avatarUrl})` }}
           />
 
           <p className="text-2xl font-bold text-white">@{user.name}</p>
@@ -218,6 +226,7 @@ export default function UserProfilePage() {
     </main>
   );
 }
+
 
 function Stat({ label, value }: { label: string; value: number }) {
   return (
