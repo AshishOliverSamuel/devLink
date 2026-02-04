@@ -80,7 +80,7 @@ export default function AppFooter() {
 
       {isDashboard && (
         <button
-          onClick={() => router.push("/post/create")}
+          onClick={() => router.push("/create-post")}
           className="-top-6 relative w-14 h-14 rounded-full text-white flex items-center justify-center shadow-lg shadow-primary/30 bg-blue-500"
         >
           <FiPlus size={24} />

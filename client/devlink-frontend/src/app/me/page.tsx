@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Image from "next/image";
 import { motion, AnimatePresence } from "framer-motion";
 import { apiFetch } from "@/lib/api";
+import { useRouter } from "next/navigation";
 import {
   FiMoreVertical,
   FiEdit2,
@@ -37,7 +38,6 @@ ChartJS.register(
   Legend
 );
 
-/* ================= TYPES ================= */
 
 type User = {
   id: string;
@@ -56,9 +56,9 @@ type Post = {
   published: boolean;
 };
 
-/* ================= PAGE ================= */
 
 export default function MyProfilePage() {
+  const router = useRouter();
   const [user, setUser] = useState<User | null>(null);
   const [posts, setPosts] = useState<Post[]>([]);
   const [archive, setArchive] = useState<Post[]>([]);
@@ -154,11 +154,27 @@ export default function MyProfilePage() {
               }
               className="w-20 h-20 rounded-full border-2 border-primary"
             />
+
             <div>
               <p className="text-2xl font-bold text-white">@{user.username}</p>
+
               <div className="flex items-center gap-2 text-[#92adc9] text-sm">
                 <FiMail /> {user.email}
               </div>
+
+              <motion.button
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+                onClick={() => router.push("/update-profile")}
+                className="mt-4 inline-flex items-center gap-2
+                  bg-[#137fec] hover:bg-[#0f6ad4]
+                  text-white text-sm font-semibold
+                  px-3 py-1.5 rounded-lg
+                  shadow-md transition-colors"
+              >
+                <FiEdit2 size={14} />
+                Update Profile
+              </motion.button>
             </div>
           </div>
 
@@ -169,7 +185,6 @@ export default function MyProfilePage() {
           </div>
         </div>
 
-        {/* TABS */}
         <div className="flex gap-6 mt-8 border-b border-slate-800">
           <Tab label="Posts" active={tab === "posts"} onClick={() => setTab("posts")} />
           <Tab label="Archive" active={tab === "archive"} onClick={() => setTab("archive")} />
@@ -181,7 +196,6 @@ export default function MyProfilePage() {
         </div>
       </div>
 
-      {/* CONTENT */}
       <div className="max-w-6xl mx-auto mt-6">
         {tab !== "analytics" ? (
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
@@ -214,7 +228,6 @@ export default function MyProfilePage() {
   );
 }
 
-/* ================= POST CARD ================= */
 
 function PostCard({
   post,
@@ -278,7 +291,6 @@ function PostCard({
   );
 }
 
-/* ================= ANALYTICS ================= */
 
 function AnalyticsSection({ posts }: { posts: Post[] }) {
   const labels = posts.map((_, i) => `Post ${i + 1}`);
@@ -320,7 +332,6 @@ function AnalyticsSection({ posts }: { posts: Post[] }) {
   );
 }
 
-/* ================= UI ================= */
 
 function Stat({ label, value }: { label: string; value: number }) {
   return (
@@ -375,7 +386,6 @@ function MenuItem({
   );
 }
 
-/* ================= EDITOR ================= */
 
 function EditorModal({
   post,
