@@ -34,6 +34,7 @@ protected.GET("/chat/request/status/:userId",controllers.GetChatRequestStatus(cl
 protected.GET("/chat/counts",controllers.GetChatCounts(client))
 protected.GET("/chatrooms", controllers.GetChatRooms(client))
 protected.GET("/ws/token", controllers.GetWSToken())
+protected.POST("/updateprofile",controllers.UpdateProfile(client))
 
 
 }
