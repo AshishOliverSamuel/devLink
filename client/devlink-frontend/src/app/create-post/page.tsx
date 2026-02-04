@@ -2,7 +2,11 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { motion, AnimatePresence } from "framer-motion";
 import { apiFetch } from "@/lib/api";
+
+const DEFAULT_IMAGE =
+  "https://images.unsplash.com/photo-1518770660439-4636190af475?auto=format&fit=crop&w=1600&q=80";
 
 export default function CreatePostPage() {
   const router = useRouter();
@@ -11,54 +15,82 @@ export default function CreatePostPage() {
   const [content, setContent] = useState("");
   const [tags, setTags] = useState<string[]>([]);
   const [tagInput, setTagInput] = useState("");
-  const [cover, setCover] = useState<string | null>(null);
+  const [imageUrl, setImageUrl] = useState<string | null>(DEFAULT_IMAGE);
+  const [published, setPublished] = useState(true);
   const [uploading, setUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0); 
   const [submitting, setSubmitting] = useState(false);
 
-  /* ================= IMAGE UPLOAD ================= */
-
   const uploadImage = async (file: File) => {
-    setUploading(true);
+    if (!file) return;
 
-    const form = new FormData();
-    form.append("file", file);
-    form.append(
+    setUploading(true);
+    setUploadProgress(0);
+
+    const formData = new FormData();
+    formData.append("file", file);
+    formData.append(
       "upload_preset",
       process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET!
     );
 
-    const res = await fetch(
+    const xhr = new XMLHttpRequest();
+    xhr.open(
+      "POST",
       `https://api.cloudinary.com/v1_1/${process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME}/image/upload`,
-      {
-        method: "POST",
-        body: form,
-      }
+      true
     );
 
-    const data = await res.json();
-    setCover(data.secure_url);
-    setUploading(false);
+    // Track Progress
+    xhr.upload.onprogress = (event) => {
+      if (event.lengthComputable) {
+        const percentComplete = Math.round((event.loaded / event.total) * 100);
+        setUploadProgress(percentComplete);
+      }
+    };
+
+    xhr.onload = () => {
+      if (xhr.status === 200) {
+        const response = JSON.parse(xhr.responseText);
+        setImageUrl(response.secure_url);
+      } else {
+        alert("Upload failed");
+      }
+      setUploading(false);
+      setUploadProgress(0);
+    };
+
+    xhr.onerror = () => {
+      alert("An error occurred during upload");
+      setUploading(false);
+    };
+
+    xhr.send(formData);
   };
 
-  /* ================= TAGS ================= */
+  const removeImage = () => {
+    setImageUrl(null);
+  };
 
-  const addTag = () => {
-    if (!tagInput.trim()) return;
-    if (tags.includes(tagInput)) return;
-
-    setTags((prev) => [...prev, tagInput]);
-    setTagInput("");
+  const onTagInput = (value: string) => {
+    if (value.endsWith(" ")) {
+      const t = value.trim().toLowerCase();
+      if (t && !tags.includes(t)) {
+        setTags((prev) => [...prev, t]);
+      }
+      setTagInput("");
+    } else {
+      setTagInput(value);
+    }
   };
 
   const removeTag = (tag: string) => {
     setTags((prev) => prev.filter((t) => t !== tag));
   };
 
-  /* ================= SUBMIT ================= */
-
   const submitPost = async () => {
-    if (!title || !content || !cover) {
-      alert("Title, image and content are required");
+    if (!title || !content) {
+      alert("Title and content are required");
       return;
     }
 
@@ -70,54 +102,108 @@ export default function CreatePostPage() {
         body: JSON.stringify({
           title,
           content,
-          image_url: cover,
+          image_url: imageUrl || "",
           tags,
+          published,
         }),
       });
 
-      router.push("/me"); // or /profile
+      if (published) {
+        router.push("/dashboard");
+      } else {
+        alert("Post saved to archives");
+        router.push("/me");
+      }
     } catch {
-      alert("Failed to publish post");
+      alert("Failed to save post");
     } finally {
       setSubmitting(false);
     }
   };
 
-  /* ================= UI ================= */
-
   return (
     <main className="min-h-screen bg-background-light dark:bg-background-dark text-white">
-
-      {/* HEADER */}
       <header className="sticky top-0 z-10 flex items-center p-4 border-b border-slate-800 bg-background-dark/80 backdrop-blur">
-        <button onClick={() => router.back()} className="text-xl">✕</button>
+        <button onClick={() => router.back()} className="text-xl">
+          ✕
+        </button>
         <h1 className="flex-1 text-center font-bold text-lg">New Post</h1>
         <span className="w-8" />
       </header>
 
-      {/* BODY */}
-      <div className="p-4 max-w-3xl mx-auto space-y-6 pb-32">
+      <div className="p-4 max-w-3xl mx-auto space-y-6 pb-36">
+        <motion.div
+          whileHover={{ scale: 1.01 }}
+          className="bg-[#192633] border border-slate-700 rounded-xl p-4 overflow-hidden relative"
+        >
+          {imageUrl ? (
+            <div className="relative aspect-video rounded-lg overflow-hidden">
+              <img
+                src={imageUrl}
+                className={`w-full h-full object-cover transition-opacity ${
+                  uploading ? "opacity-50" : "opacity-100"
+                }`}
+              />
 
-        {/* IMAGE */}
-        <div className="bg-[#192633] border border-slate-700 rounded-xl p-4">
-          <div className="aspect-video rounded-lg bg-slate-800 overflow-hidden mb-3">
-            {cover ? (
-              <img src={cover} className="w-full h-full object-cover" />
-            ) : (
-              <label className="w-full h-full flex items-center justify-center cursor-pointer text-slate-400">
-                {uploading ? "Uploading..." : "Click to upload cover image"}
-                <input
-                  type="file"
-                  accept="image/*"
-                  hidden
-                  onChange={(e) =>
-                    e.target.files && uploadImage(e.target.files[0])
-                  }
-                />
-              </label>
-            )}
-          </div>
-        </div>
+              <div className="absolute inset-0 bg-black/40 opacity-0 hover:opacity-100 transition flex items-center justify-center gap-4">
+                <label className="cursor-pointer bg-primary px-4 py-2 rounded-lg">
+                  {uploading ? `Uploading ${uploadProgress}%` : "Change"}
+                  <input
+                    type="file"
+                    hidden
+                    accept="image/*"
+                    disabled={uploading}
+                    onChange={(e) =>
+                      e.target.files && uploadImage(e.target.files[0])
+                    }
+                  />
+                </label>
+
+                {!uploading && (
+                  <button
+                    onClick={removeImage}
+                    className="bg-red-500 px-4 py-2 rounded-lg"
+                  >
+                    Remove
+                  </button>
+                )}
+              </div>
+
+              {/* PROGRESS BAR */}
+              {uploading && (
+                <div className="absolute bottom-0 left-0 w-full h-1 bg-slate-700">
+                  <motion.div
+                    initial={{ width: 0 }}
+                    animate={{ width: `${uploadProgress}%` }}
+                    className="h-full bg-primary shadow-[0_0_10px_#3b82f6]"
+                  />
+                </div>
+              )}
+            </div>
+          ) : (
+            <label className="aspect-video flex flex-col items-center justify-center rounded-lg bg-slate-800 cursor-pointer relative overflow-hidden">
+              {uploading ? `Uploading ${uploadProgress}%` : "Add image (optional)"}
+              <input
+                type="file"
+                hidden
+                accept="image/*"
+                disabled={uploading}
+                onChange={(e) =>
+                  e.target.files && uploadImage(e.target.files[0])
+                }
+              />
+              {uploading && (
+                <div className="absolute bottom-0 left-0 w-full h-1 bg-slate-700">
+                  <motion.div
+                    initial={{ width: 0 }}
+                    animate={{ width: `${uploadProgress}%` }}
+                    className="h-full bg-primary"
+                  />
+                </div>
+              )}
+            </label>
+          )}
+        </motion.div>
 
         {/* TITLE */}
         <input
@@ -133,23 +219,27 @@ export default function CreatePostPage() {
             Tags
           </p>
 
-          <div className="flex flex-wrap gap-2">
-            {tags.map((t) => (
-              <span
-                key={t}
-                className="bg-primary/10 text-primary px-3 py-1 rounded-full text-sm flex items-center gap-2"
-              >
-                {t}
-                <button onClick={() => removeTag(t)}>✕</button>
-              </span>
-            ))}
+          <div className="flex flex-wrap gap-2 items-center">
+            <AnimatePresence>
+              {tags.map((t) => (
+                <motion.span
+                  key={t}
+                  initial={{ scale: 0.8, opacity: 0 }}
+                  animate={{ scale: 1, opacity: 1 }}
+                  exit={{ scale: 0.8, opacity: 0 }}
+                  className="text-primary font-medium text-sm flex items-center gap-1"
+                >
+                  #{t}
+                  <button onClick={() => removeTag(t)}>✕</button>
+                </motion.span>
+              ))}
+            </AnimatePresence>
 
             <input
               value={tagInput}
-              onChange={(e) => setTagInput(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && addTag()}
-              placeholder="Add tag"
-              className="bg-transparent outline-none text-sm text-white"
+              onChange={(e) => onTagInput(e.target.value)}
+              placeholder="type & press space"
+              className="bg-transparent outline-none text-sm text-white placeholder:text-slate-500"
             />
           </div>
         </div>
@@ -163,16 +253,28 @@ export default function CreatePostPage() {
         />
       </div>
 
-      {/* FOOTER */}
       <footer className="fixed bottom-0 left-0 right-0 bg-background-dark/90 backdrop-blur border-t border-slate-800 p-4">
-        <div className="max-w-3xl mx-auto">
-          <button
-            disabled={submitting}
+        <div className="max-w-3xl mx-auto flex items-center gap-4">
+          <label className="flex items-center gap-2 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={published}
+              onChange={(e) => setPublished(e.target.checked)}
+              className="accent-primary w-5 h-5"
+            />
+            <span className="text-sm">
+              {published ? "Publish post" : "Save to archives"}
+            </span>
+          </label>
+
+          <motion.button
+            whileTap={{ scale: 0.97 }}
+            disabled={submitting || uploading}
             onClick={submitPost}
-            className="w-full bg-primary hover:bg-primary/90 text-white font-bold py-3 rounded-xl shadow-lg active:scale-95 transition"
+            className="ml-auto bg-primary hover:bg-primary/90 text-white font-bold px-6 py-3 rounded-xl shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            {submitting ? "Publishing..." : "Publish Post"}
-          </button>
+            {submitting ? "Saving..." : "Confirm"}
+          </motion.button>
         </div>
       </footer>
     </main>
