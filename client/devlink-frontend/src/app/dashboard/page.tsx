@@ -37,7 +37,6 @@ type User = {
   profile_image?: string;
 };
 
-/* ================= HELPERS ================= */
 
 const excerpt = (t: string, l = 90) =>
   t.length > l ? t.slice(0, l) + "…" : t;
@@ -45,7 +44,6 @@ const excerpt = (t: string, l = 90) =>
 const formatViews = (v: number) =>
   v >= 1000 ? `${(v / 1000).toFixed(1)}k` : v.toString();
 
-/* ================= PAGE ================= */
 
 export default function DashboardPage() {
   const router = useRouter();
@@ -54,13 +52,11 @@ export default function DashboardPage() {
   const [posts, setPosts] = useState<Post[]>([]);
   const [loading, setLoading] = useState(true);
 
-  /* 🔍 Search state */
   const [search, setSearch] = useState("");
   const [searchPosts, setSearchPosts] = useState<Post[]>([]);
   const [searchUsers, setSearchUsers] = useState<User[]>([]);
   const [showSearch, setShowSearch] = useState(false);
 
-  /* ================= AUTH ================= */
 
   useEffect(() => {
     apiFetch("/auth/me")
@@ -68,7 +64,6 @@ export default function DashboardPage() {
       .catch(() => router.replace("/login"));
   }, [router]);
 
-  /* ================= TRENDING POSTS ================= */
 
   useEffect(() => {
     apiFetch("/posts/trending")
@@ -76,7 +71,6 @@ export default function DashboardPage() {
       .finally(() => setLoading(false));
   }, []);
 
-  /* ================= SEARCH DROPDOWN ================= */
 
   useEffect(() => {
     if (search.trim().length < 2) {
@@ -119,7 +113,6 @@ export default function DashboardPage() {
     <main className="min-h-screen bg-[#101922] flex justify-center">
       <div className="w-full max-w-6xl px-2 lg:px-6 pb-32">
 
-        {/* ================= HEADER ================= */}
         <div className="sticky top-0 z-50 bg-[#101922]/90 backdrop-blur">
           <div className="flex items-center justify-between p-4">
 
@@ -136,13 +129,11 @@ export default function DashboardPage() {
               </div>
             </div>
 
-            {/* 🔹 RIGHT ACTIONS */}
             <div className="flex items-center gap-2">
               <button className="h-10 w-10 rounded-full hover:bg-slate-800 flex items-center justify-center">
                 <FiBell />
               </button>
 
-              {/* 👤 LOGGED-IN USER AVATAR */}
               <button
                 onClick={() => router.push(`/users/${user.id}`)}
                 className="h-10 w-10 rounded-full overflow-hidden border border-slate-700 hover:border-primary transition"
@@ -166,7 +157,6 @@ export default function DashboardPage() {
             </div>
           </div>
 
-          {/* ================= SEARCH ================= */}
           <div className="px-4 pb-4 relative">
             <div className="flex items-center gap-2 bg-[#233648] h-11 rounded-xl px-4">
               <FiSearch className="text-[#92adc9]" />
@@ -224,7 +214,6 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        {/* ================= POSTS ================= */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 p-2">
           {loading &&
             Array.from({ length: 4 }).map((_, i) => (
