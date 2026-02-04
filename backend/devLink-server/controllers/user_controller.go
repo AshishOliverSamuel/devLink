@@ -76,6 +76,92 @@ c.JSON(http.StatusOK, gin.H{
 }
 
 
+func UpdateProfile(client *mongo.Client)gin.HandlerFunc{
+	return func(c *gin.Context){
+		userid,exists:=c.Get("user_id")
+		if !exists{
+			c.JSON(http.StatusUnauthorized,gin.H{"error":"Unauthorized"})
+			return 
+		}
+
+		userId,err:=bson.ObjectIDFromHex(userid.(string))
+
+		if err!=nil{
+			c.JSON(http.StatusBadRequest,gin.H{"error":"Invalid user id"})
+			return 
+		}
+
+		userCollection:=database.OpenCollection("users",client)
+
+		var user models.User
+
+
+		ctx,cancel:=context.WithTimeout(context.Background(),10*time.Second)
+
+		defer cancel()
+
+		if err:=userCollection.FindOne(ctx,bson.M{"_id":userId}).Decode(&user);err!=nil{
+			c.JSON(http.StatusBadRequest,gin.H{"error":"Unable to find user"})
+			return 
+		}
+
+		var data struct{
+			Username *string `json:"username"`
+			Bio *string `json:"bio"`
+			ProfileImage *string `json:"profile_image"`
+
+		}
+
+		if err:=c.ShouldBindJSON(&data);err!=nil{
+			c.JSON(http.StatusBadRequest,gin.H{"error":"Invalid input data"})
+			return 
+		}
+
+		set:=bson.M{}
+
+		if data.Username!=nil{
+			set["username"]=*data.Username
+		}
+
+		if data.Bio!=nil{
+			set["bio"]=*data.Bio
+		}
+
+		if data.ProfileImage!=nil{
+			set["profile_image"]=*data.ProfileImage
+		}
+
+		if len(set) == 0 {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Nothing to update"})
+			return
+		}
+
+		set["updated_at"] = time.Now()
+
+		_, err = userCollection.UpdateOne(
+			context.Background(),
+			bson.M{"_id": userId},
+			bson.M{"$set": set},
+		)
+
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Update failed"})
+			return
+		}
+
+		c.JSON(http.StatusOK, gin.H{"message": "Profile updated"})
+
+
+
+
+
+
+
+
+	}
+}
+
+
 
 func SearchUsers(client *mongo.Client) gin.HandlerFunc {
 	return func(c *gin.Context) {
