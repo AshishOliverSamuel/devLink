@@ -70,12 +70,12 @@ export default function CreatePostPage() {
         body: JSON.stringify({
           title,
           content,
-          cover_image: cover,
+          image_url: cover,
           tags,
         }),
       });
 
-      router.push("/"); // or /profile
+      router.push("/me"); // or /profile
     } catch {
       alert("Failed to publish post");
     } finally {
