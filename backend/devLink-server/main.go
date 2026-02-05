@@ -28,8 +28,22 @@ func main() {
 			"http://localhost:3000",
 			"https://dev-link-o6lg.vercel.app",
 		},
-		AllowMethods:     []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
-		AllowHeaders:     []string{"Content-Type", "Authorization"},
+		AllowMethods: []string{
+			"GET",
+			"POST",
+			"PUT",
+			"DELETE",
+			"OPTIONS",
+		},
+		AllowHeaders: []string{
+			"Content-Type",
+			"Authorization",
+			"Upgrade",
+			"Connection",
+			"Sec-WebSocket-Key",
+			"Sec-WebSocket-Version",
+			"Sec-WebSocket-Extensions",
+		},
 		AllowCredentials: true,
 	}))
 
@@ -44,6 +58,7 @@ func main() {
 	routes.AuthRoutes(router, client)
 	routes.PublicRoutes(router, client)
 	routes.ProtectedRoutes(router, client)
+
 	routes.WebSocketRoutes(router, client)
 
 	port := os.Getenv("PORT")
