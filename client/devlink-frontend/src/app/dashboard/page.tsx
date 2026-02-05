@@ -42,11 +42,9 @@ const excerpt = (t: string, l = 90) =>
 const formatViews = (v: number) =>
   v >= 1000 ? `${(v / 1000).toFixed(1)}k` : v.toString();
 
-// --- SKELETON LOADER COMPONENT ---
 const DashboardSkeleton = () => (
   <div className="min-h-screen bg-[#101922] flex justify-center animate-pulse">
     <div className="w-full max-w-6xl px-2 lg:px-6">
-      {/* Header Skeleton */}
       <div className="flex items-center justify-between p-4">
         <div className="flex items-center gap-3">
           <div className="h-10 w-10 rounded-lg bg-[#233648]" />
@@ -89,7 +87,7 @@ export default function DashboardPage() {
 
     const loadMe = async () => {
       try {
-        const res = await fetch("/api/auth/me", {
+        const res = await fetch("/auth/me", {
           credentials: "include",
           cache: "no-store",
         });
@@ -147,7 +145,7 @@ export default function DashboardPage() {
   }, [search]);
 
   const logout = async () => {
-    await fetch("/api/auth/logout", {
+    await fetch("/auth/logout", {
       method: "POST",
       credentials: "include",
       cache: "no-store",
@@ -156,7 +154,6 @@ export default function DashboardPage() {
     window.location.href = "/login";
   };
 
-  // ✅ FIXED: Now shows the Skeleton instead of plain text
   if (!user) {
     return <DashboardSkeleton />;
   }
