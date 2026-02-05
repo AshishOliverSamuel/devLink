@@ -121,7 +121,7 @@ export default function UpdateProfilePage() {
       toast.success("Profile updated", { id: t });
 
       router.refresh(); 
-      router.push("/profile");
+      router.push("/me");
     } catch {
       toast.error("Update failed", { id: t });
     } finally {
