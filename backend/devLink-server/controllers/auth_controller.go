@@ -287,13 +287,33 @@ func LoginUser(client *mongo.Client) gin.HandlerFunc {
 
 func LogoutUser() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		clearAuthCookie(c)
+
+		isProd := os.Getenv("ENV") == "production"
+
+		http.SetCookie(c.Writer, &http.Cookie{
+			Name:     "access_token",
+			Value:    "",
+			MaxAge:   -1,
+			Path:     "/",              
+			Domain:   cookieDomain(),   
+			HttpOnly: true,
+			Secure:   isProd,
+			SameSite: func() http.SameSite {
+				if isProd {
+					return http.SameSiteNoneMode
+				}
+				return http.SameSiteLaxMode
+			}(),
+		})
+
+		c.Header("Cache-Control", "no-store")
 
 		c.JSON(http.StatusOK, gin.H{
 			"message": "Logged out successfully",
 		})
 	}
 }
+
 
 
 func GetMe(client *mongo.Client) gin.HandlerFunc {
