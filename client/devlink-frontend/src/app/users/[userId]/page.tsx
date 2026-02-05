@@ -12,7 +12,7 @@ type User = {
   id?: string;
   name: string;
   bio?: string;
-  profile_image?: string; // ✅ FIX
+  profile_image?: string; 
 };
 
 type Post = {

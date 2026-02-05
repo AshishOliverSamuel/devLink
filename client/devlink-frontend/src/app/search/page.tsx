@@ -1,4 +1,5 @@
 "use client";
+export const dynamic = "force-dynamic";
 
 import { useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -8,7 +9,6 @@ import { ArrowLeft, Search, Filter } from "lucide-react";
 import { apiFetch } from "@/lib/api";
 import AppFooter from "@/components/ui/AppFooter";
 
-/* ================= TYPES ================= */
 
 type User = {
   id: string;
@@ -30,13 +30,11 @@ type Post = {
   };
 };
 
-/* ================= PAGE ================= */
 
 export default function SearchPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
 
-  /* 🔑 URL is source of truth */
   const urlQuery = searchParams.get("q") || "";
 
   const [query, setQuery] = useState(urlQuery);
@@ -47,13 +45,11 @@ export default function SearchPage() {
   const [suggested, setSuggested] = useState<User[]>([]);
   const [loading, setLoading] = useState(false);
 
-  /* ================= SYNC URL → INPUT ================= */
 
   useEffect(() => {
     setQuery(urlQuery);
   }, [urlQuery]);
 
-  /* ================= Suggested Users ================= */
 
   useEffect(() => {
     if (!query) {
@@ -62,7 +58,6 @@ export default function SearchPage() {
     }
   }, [query]);
 
-  /* ================= SEARCH ================= */
 
   useEffect(() => {
     if (query.trim().length < 2) {
@@ -94,7 +89,6 @@ export default function SearchPage() {
     <main className="min-h-screen bg-[#0f172a] text-white pb-32">
       <div className="max-w-5xl mx-auto px-4">
 
-        {/* ================= HEADER ================= */}
         <header className="sticky top-0 z-40 bg-[#0f172a]/90 backdrop-blur">
           <div className="flex items-center gap-4 py-4">
             <button
@@ -108,7 +102,6 @@ export default function SearchPage() {
             <Filter className="text-blue-400" />
           </div>
 
-          {/* Search Bar */}
           <div className="flex items-center bg-[#1e293b] rounded-xl h-12 px-4">
             <Search className="text-slate-400" size={18} />
             <input
@@ -123,7 +116,6 @@ export default function SearchPage() {
             />
           </div>
 
-          {/* Tabs */}
           <div className="flex mt-4 border-b border-slate-700">
             <Tab active={tab === "posts"} onClick={() => setTab("posts")}>
               Posts
@@ -134,17 +126,14 @@ export default function SearchPage() {
           </div>
         </header>
 
-        {/* ================= CONTENT ================= */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mt-6">
 
-          {/* ===== MAIN RESULTS ===== */}
           <section className="lg:col-span-2 space-y-4">
 
             {loading && (
               <p className="text-slate-400 text-sm">Searching…</p>
             )}
 
-            {/* Posts */}
             {tab === "posts" && (
               <AnimatePresence>
                 {posts.map((post) => (
@@ -157,7 +146,6 @@ export default function SearchPage() {
                     onClick={() => router.push(`/post/${post.slug}`)}
                     className="flex gap-4 p-4 bg-[#111827] rounded-xl border border-slate-800 hover:border-blue-500/40 cursor-pointer transition"
                   >
-                    {/* Thumbnail */}
                     <div className="relative w-28 h-20 rounded-lg overflow-hidden bg-slate-800 shrink-0">
                       {post.image_url ? (
                         <Image
@@ -173,7 +161,6 @@ export default function SearchPage() {
                       )}
                     </div>
 
-                    {/* Content */}
                     <div className="flex-1">
                       <p className="font-bold leading-snug">
                         {post.title}
@@ -208,7 +195,6 @@ export default function SearchPage() {
               </AnimatePresence>
             )}
 
-            {/* Users */}
             {tab === "users" &&
               users.map((u) => (
                 <UserRow
@@ -219,7 +205,6 @@ export default function SearchPage() {
               ))}
           </section>
 
-          {/* ===== SUGGESTED USERS (DESKTOP) ===== */}
           <aside className="hidden lg:block">
             {!query && (
               <div className="bg-[#111827] rounded-xl border border-slate-800 p-4">
@@ -248,7 +233,6 @@ export default function SearchPage() {
   );
 }
 
-/* ================= COMPONENTS ================= */
 
 function Tab({
   children,
