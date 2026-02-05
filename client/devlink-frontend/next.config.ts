@@ -13,21 +13,17 @@ const nextConfig = {
   async rewrites() {
     const backend =
       process.env.NODE_ENV === "production"
-        ? "https://your-backend-url.onrender.com" 
+        ? "https://your-backend-url.onrender.com"
         : "http://localhost:8080";
 
     return [
       {
-        source: "/auth/:path*",
-        destination: `${backend}/auth/:path*`,
+        source: "/api/:path*",
+        destination: `${backend}/api/:path*`,
       },
       {
-        source: "/ws/:path*",
-        destination: `${backend}/ws/:path*`,
-      },
-      {
-        source: "/(posts|home|search|users|chatrooms|createpost|update-profile)/:path*",
-        destination: `${backend}/:path*`,
+        source: "/api/ws/:path*",
+        destination: `${backend}/api/ws/:path*`,
       },
     ];
   },
