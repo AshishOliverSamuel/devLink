@@ -135,9 +135,14 @@ export default function DashboardPage() {
   }, [search]);
 
   const logout = async () => {
+  try {
     await apiFetch("/auth/logout", { method: "POST" });
-    window.location.href = "/login";
-  };
+  } catch {}
+
+  router.replace("/login");
+  router.refresh();
+};
+
 
   if (!user) {
     return <DashboardSkeleton />;

@@ -24,11 +24,9 @@ import (
 
 
 func cookieDomain() string {
-	if os.Getenv("ENV") == "production" {
-		return ".onrender.com"
-	}
-	return "" 
+	return ""
 }
+
 
 func setAuthCookie(c *gin.Context, token string) {
 	isProd := os.Getenv("ENV") == "production"
@@ -287,24 +285,7 @@ func LoginUser(client *mongo.Client) gin.HandlerFunc {
 
 func LogoutUser() gin.HandlerFunc {
 	return func(c *gin.Context) {
-
-		isProd := os.Getenv("ENV") == "production"
-
-		http.SetCookie(c.Writer, &http.Cookie{
-			Name:     "access_token",
-			Value:    "",
-			MaxAge:   -1,
-			Path:     "/",              
-			Domain:   cookieDomain(),   
-			HttpOnly: true,
-			Secure:   isProd,
-			SameSite: func() http.SameSite {
-				if isProd {
-					return http.SameSiteNoneMode
-				}
-				return http.SameSiteLaxMode
-			}(),
-		})
+		clearAuthCookie(c)
 
 		c.Header("Cache-Control", "no-store")
 
@@ -313,6 +294,7 @@ func LogoutUser() gin.HandlerFunc {
 		})
 	}
 }
+
 
 
 
