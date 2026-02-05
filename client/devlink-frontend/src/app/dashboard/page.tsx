@@ -13,7 +13,6 @@ import {
   FiEye,
 } from "react-icons/fi";
 
-
 type Author = {
   id: string;
   username: string;
@@ -37,13 +36,41 @@ type User = {
   profile_image?: string;
 };
 
-
 const excerpt = (t: string, l = 90) =>
   t.length > l ? t.slice(0, l) + "…" : t;
 
 const formatViews = (v: number) =>
   v >= 1000 ? `${(v / 1000).toFixed(1)}k` : v.toString();
 
+// --- SKELETON LOADER COMPONENT ---
+const DashboardSkeleton = () => (
+  <div className="min-h-screen bg-[#101922] flex justify-center animate-pulse">
+    <div className="w-full max-w-6xl px-2 lg:px-6">
+      {/* Header Skeleton */}
+      <div className="flex items-center justify-between p-4">
+        <div className="flex items-center gap-3">
+          <div className="h-10 w-10 rounded-lg bg-[#233648]" />
+          <div className="space-y-2">
+            <div className="h-3 w-16 bg-[#233648] rounded" />
+            <div className="h-2 w-12 bg-[#233648] rounded" />
+          </div>
+        </div>
+        <div className="flex gap-2">
+          <div className="h-10 w-10 rounded-full bg-[#233648]" />
+          <div className="h-10 w-10 rounded-full bg-[#233648]" />
+        </div>
+      </div>
+      <div className="px-4 pb-4">
+        <div className="h-11 w-full bg-[#233648] rounded-xl" />
+      </div>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 p-2">
+        {[1, 2, 3, 4].map((i) => (
+          <div key={i} className="h-64 rounded-xl bg-[#192633]" />
+        ))}
+      </div>
+    </div>
+  </div>
+);
 
 export default function DashboardPage() {
   const router = useRouter();
@@ -57,20 +84,43 @@ export default function DashboardPage() {
   const [searchUsers, setSearchUsers] = useState<User[]>([]);
   const [showSearch, setShowSearch] = useState(false);
 
-
   useEffect(() => {
-    apiFetch("/auth/me")
-      .then(setUser)
-      .catch(() => router.replace("/login"));
-  }, [router]);
+    let mounted = true;
 
+    const loadMe = async () => {
+      try {
+        const res = await fetch("/api/auth/me", {
+          credentials: "include",
+          cache: "no-store",
+        });
+
+        if (!res.ok) throw new Error("unauthenticated");
+
+        const data = await res.json();
+
+        if (mounted) {
+          setUser(data);
+        }
+      } catch {
+        if (mounted) {
+          setUser(null);
+          router.replace("/login");
+        }
+      }
+    };
+
+    loadMe();
+
+    return () => {
+      mounted = false;
+    };
+  }, [router]);
 
   useEffect(() => {
     apiFetch("/posts/trending")
       .then((res) => setPosts(res.posts || []))
       .finally(() => setLoading(false));
   }, []);
-
 
   useEffect(() => {
     if (search.trim().length < 2) {
@@ -97,43 +147,38 @@ export default function DashboardPage() {
   }, [search]);
 
   const logout = async () => {
-    await apiFetch("/auth/logout", { method: "POST" });
-    router.replace("/login");
+    await fetch("/api/auth/logout", {
+      method: "POST",
+      credentials: "include",
+      cache: "no-store",
+    });
+
+    window.location.href = "/login";
   };
 
+  // ✅ FIXED: Now shows the Skeleton instead of plain text
   if (!user) {
-    return (
-      <div className="min-h-screen bg-[#101922] flex items-center justify-center text-[#92adc9]">
-        Loading dashboard…
-      </div>
-    );
+    return <DashboardSkeleton />;
   }
 
   return (
     <main className="min-h-screen bg-[#101922] flex justify-center">
       <div className="w-full max-w-6xl px-2 lg:px-6 pb-32">
-
         <div className="sticky top-0 z-50 bg-[#101922]/90 backdrop-blur">
           <div className="flex items-center justify-between p-4">
-
             <div className="flex items-start gap-3">
               <div className="h-10 w-10 rounded-lg bg-[#233648] flex items-center justify-center">
                 <FiCode className="text-primary" size={18} />
               </div>
-
               <div>
                 <p className="text-white font-semibold text-sm">DevLink</p>
-                <p className="text-xs text-[#92adc9] mt-1">
-                  @{user.username}
-                </p>
+                <p className="text-xs text-[#92adc9] mt-1"> @{user.username} </p>
               </div>
             </div>
-
             <div className="flex items-center gap-2">
               <button className="h-10 w-10 rounded-full hover:bg-slate-800 flex items-center justify-center">
                 <FiBell />
               </button>
-
               <button
                 onClick={() => router.push(`/users/${user.id}`)}
                 className="h-10 w-10 rounded-full overflow-hidden border border-slate-700 hover:border-primary transition"
@@ -147,7 +192,6 @@ export default function DashboardPage() {
                   className="w-full h-full object-cover"
                 />
               </button>
-
               <button
                 onClick={logout}
                 className="h-10 w-10 rounded-full hover:bg-slate-800 flex items-center justify-center text-primary"
@@ -156,7 +200,6 @@ export default function DashboardPage() {
               </button>
             </div>
           </div>
-
           <div className="px-4 pb-4 relative">
             <div className="flex items-center gap-2 bg-[#233648] h-11 rounded-xl px-4">
               <FiSearch className="text-[#92adc9]" />
@@ -167,10 +210,8 @@ export default function DashboardPage() {
                 className="bg-transparent outline-none text-sm w-full text-white placeholder-[#92adc9]"
               />
             </div>
-
             {showSearch && (
               <div className="absolute top-14 left-4 right-4 bg-[#192633] border border-slate-800 rounded-xl shadow-xl overflow-hidden z-50">
-
                 {searchPosts.map((p) => (
                   <div
                     key={p.id}
@@ -179,11 +220,11 @@ export default function DashboardPage() {
                   >
                     <p className="text-sm font-bold truncate">{p.title}</p>
                     <p className="text-xs text-[#92adc9]">
-                      by @{p.author.username}
+                      {" "}
+                      by @{p.author.username}{" "}
                     </p>
                   </div>
                 ))}
-
                 {searchUsers.map((u) => (
                   <div
                     key={u.id}
@@ -197,12 +238,9 @@ export default function DashboardPage() {
                       }
                       className="w-6 h-6 rounded-full"
                     />
-                    <span className="text-sm font-semibold">
-                      @{u.username}
-                    </span>
+                    <span className="text-sm font-semibold"> @{u.username} </span>
                   </div>
                 ))}
-
                 <button
                   onClick={() => router.push(`/search?q=${search}`)}
                   className="w-full py-3 text-primary text-sm font-bold hover:bg-slate-800"
@@ -217,12 +255,8 @@ export default function DashboardPage() {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 p-2">
           {loading &&
             Array.from({ length: 4 }).map((_, i) => (
-              <div
-                key={i}
-                className="h-56 rounded-xl bg-[#192633] animate-pulse"
-              />
+              <div key={i} className="h-56 rounded-xl bg-[#192633] animate-pulse" />
             ))}
-
           {!loading &&
             posts.map((post) => (
               <div
@@ -240,14 +274,11 @@ export default function DashboardPage() {
                     />
                   </div>
                 )}
-
                 <div className="p-4 space-y-2">
                   <p className="text-lg font-bold">{post.title}</p>
-
                   <p className="text-sm text-[#92adc9] line-clamp-2">
                     {excerpt(post.content)}
                   </p>
-
                   <div className="flex items-center justify-between pt-3 border-t border-slate-800 text-xs text-[#92adc9]">
                     <div
                       onClick={(e) => {
@@ -265,17 +296,14 @@ export default function DashboardPage() {
                       />
                       @{post.author.username}
                     </div>
-
                     <div className="flex items-center gap-1">
-                      <FiEye />
-                      {formatViews(post.view_count)}
+                      <FiEye /> {formatViews(post.view_count)}
                     </div>
                   </div>
                 </div>
               </div>
             ))}
         </div>
-
         <AppFooter />
       </div>
     </main>
