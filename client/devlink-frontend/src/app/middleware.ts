@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 
-
 const PROTECTED_ROUTES = [
   "/chat",
   "/create-post",
@@ -11,7 +10,6 @@ const PROTECTED_ROUTES = [
   "/update-profile",
   "/users",
 ];
-
 
 const AUTH_ROUTES = [
   "/login",
@@ -29,12 +27,6 @@ export function middleware(req: NextRequest) {
       const loginUrl = new URL("/login", req.url);
       loginUrl.searchParams.set("next", pathname);
       return NextResponse.redirect(loginUrl);
-    }
-  }
-
-  if (AUTH_ROUTES.some((route) => pathname.startsWith(route))) {
-    if (token) {
-      return NextResponse.redirect(new URL("/", req.url));
     }
   }
 
