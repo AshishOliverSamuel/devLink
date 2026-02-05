@@ -8,6 +8,7 @@ import (
 	"math/big"
 	"net/http"
 	"net/url"
+	"os"
 	"time"
 
 	"github.com/ayushmehta03/devLink-backend/database"
@@ -19,6 +20,14 @@ import (
 	"go.mongodb.org/mongo-driver/v2/mongo"
 	"golang.org/x/crypto/bcrypt"
 )
+
+
+func cookieDomain() string {
+	if os.Getenv("ENV") == "production" {
+		return ".onrender.com"
+	}
+	return "localhost"
+}
 
 func GenerateOTP() string {
 	max := big.NewInt(1000000)
@@ -36,6 +45,7 @@ func HashPassword(password string) (string, error) {
 	}
 	return string(bytes), nil
 }
+
 
 func RegisterUser(client *mongo.Client) gin.HandlerFunc {
 	return func(c *gin.Context) {
@@ -92,14 +102,14 @@ func RegisterUser(client *mongo.Client) gin.HandlerFunc {
 		otpHash, _ := HashPassword(otp)
 
 		user.UserId = bson.NewObjectID().Hex()
-		user.CreatedAt = time.Now()
-		user.UpdatedAt = time.Now()
 		user.Password = hashedPassword
 		user.IsVerified = false
 		user.Role = "user"
 		user.OTPHash = otpHash
 		user.ProfileImage = avatarURL
 		user.OTPExpiry = time.Now().Add(10 * time.Minute)
+		user.CreatedAt = time.Now()
+		user.UpdatedAt = time.Now()
 
 		if _, err := userCollection.InsertOne(ctx, user); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to register user"})
@@ -119,6 +129,7 @@ func RegisterUser(client *mongo.Client) gin.HandlerFunc {
 		})
 	}
 }
+
 
 func VerifyOtp(client *mongo.Client) gin.HandlerFunc {
 	return func(c *gin.Context) {
@@ -159,7 +170,7 @@ func VerifyOtp(client *mongo.Client) gin.HandlerFunc {
 			return
 		}
 
-		update := bson.M{
+		_, err := userCollection.UpdateOne(ctx, bson.M{"email": req.Email}, bson.M{
 			"$set": bson.M{
 				"is_verified": true,
 				"updated_at":  time.Now(),
@@ -168,24 +179,20 @@ func VerifyOtp(client *mongo.Client) gin.HandlerFunc {
 				"otp_hash":   "",
 				"otp_expiry": "",
 			},
-		}
-
-		if _, err := userCollection.UpdateOne(ctx, bson.M{"email": req.Email}, update); err != nil {
+		})
+		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Verification failed"})
 			return
 		}
 
-		token, err := utils.GenerateToken(user.Id.Hex(), user.Email, user.Role)
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to generate token"})
-			return
-		}
+		token, _ := utils.GenerateToken(user.Id.Hex(), user.Email, user.Role)
 
 		http.SetCookie(c.Writer, &http.Cookie{
 			Name:     "access_token",
 			Value:    token,
 			MaxAge:   3600 * 24,
 			Path:     "/",
+			Domain:   cookieDomain(), 
 			HttpOnly: true,
 			Secure:   true,
 			SameSite: http.SameSiteNoneMode,
@@ -197,6 +204,121 @@ func VerifyOtp(client *mongo.Client) gin.HandlerFunc {
 	}
 }
 
+
+func LoginUser(client *mongo.Client) gin.HandlerFunc {
+	return func(c *gin.Context) {
+
+		var loginReq models.UserLogin
+
+		if err := c.ShouldBindJSON(&loginReq); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid input data"})
+			return
+		}
+
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+
+		userCollection := database.OpenCollection("users", client)
+
+		var user models.User
+		if err := userCollection.FindOne(ctx, bson.M{"email": loginReq.Email}).Decode(&user); err != nil {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "No account found with this email"})
+			return
+		}
+
+		if !user.IsVerified {
+			c.JSON(http.StatusForbidden, gin.H{
+				"error": "Account not verified",
+				"code":  "ACCOUNT_NOT_VERIFIED",
+				"email": user.Email,
+			})
+			return
+		}
+
+		if err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(loginReq.Password)); err != nil {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid email or password"})
+			return
+		}
+
+		token, _ := utils.GenerateToken(user.Id.Hex(), user.Email, user.Role)
+
+		http.SetCookie(c.Writer, &http.Cookie{
+			Name:     "access_token",
+			Value:    token,
+			MaxAge:   3600 * 24,
+			Path:     "/",
+			Domain:   cookieDomain(), 
+			HttpOnly: true,
+			Secure:   true,
+			SameSite: http.SameSiteNoneMode,
+		})
+
+		c.JSON(http.StatusOK, gin.H{
+			"message": "Login successful",
+		})
+	}
+}
+
+
+func LogoutUser() gin.HandlerFunc {
+	return func(c *gin.Context) {
+
+		http.SetCookie(c.Writer, &http.Cookie{
+			Name:     "access_token",
+			Value:    "",
+			MaxAge:   -1,
+			Path:     "/",
+			Domain:   cookieDomain(), 
+			HttpOnly: true,
+			Secure:   true,
+			SameSite: http.SameSiteNoneMode,
+		})
+
+		c.JSON(http.StatusOK, gin.H{
+			"message": "Logged out successfully",
+		})
+	}
+}
+
+
+func GetMe(client *mongo.Client) gin.HandlerFunc {
+	return func(c *gin.Context) {
+
+		tokenStr, err := c.Cookie("access_token")
+		if err != nil {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "not authenticated"})
+			return
+		}
+
+		claims, err := utils.VerifyToken(tokenStr)
+		if err != nil {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid token"})
+			return
+		}
+
+		userObjId, _ := bson.ObjectIDFromHex(claims.UserID)
+
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+
+		userCollection := database.OpenCollection("users", client)
+
+		var user models.User
+		if err := userCollection.FindOne(ctx, bson.M{"_id": userObjId}).Decode(&user); err != nil {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "user not found"})
+			return
+		}
+
+		c.JSON(http.StatusOK, gin.H{
+			"id":            user.Id,
+			"username":      user.UserName,
+			"email":         user.Email,
+			"profile_image": user.ProfileImage,
+			"role":          user.Role,
+			"created_at":    user.CreatedAt,
+		})
+	}
+}
 func ResendOtp(client *mongo.Client) gin.HandlerFunc {
 	return func(c *gin.Context) {
 
@@ -247,6 +369,7 @@ func ResendOtp(client *mongo.Client) gin.HandlerFunc {
 
 		if err := utils.SendOTPEmail(user.Email, newOtp); err != nil {
 			log.Println("RESEND OTP EMAIL FAILED:", err)
+
 			c.JSON(http.StatusInternalServerError, gin.H{
 				"error": "Failed to send OTP email. Please try again.",
 			})
@@ -259,127 +382,3 @@ func ResendOtp(client *mongo.Client) gin.HandlerFunc {
 	}
 }
 
-func LoginUser(client *mongo.Client) gin.HandlerFunc {
-	return func(c *gin.Context) {
-
-		var loginReq models.UserLogin
-
-		if err := c.ShouldBindJSON(&loginReq); err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid input data"})
-			return
-		}
-
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-		defer cancel()
-
-		userCollection := database.OpenCollection("users", client)
-
-		var user models.User
-		if err := userCollection.FindOne(ctx, bson.M{"email": loginReq.Email}).Decode(&user); err != nil {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "No account found with this email"})
-			return
-		}
-
-		if !user.IsVerified {
-			c.JSON(http.StatusForbidden, gin.H{
-				"error": "Account not verified",
-				"code":  "ACCOUNT_NOT_VERIFIED",
-				"email": user.Email,
-			})
-			return
-		}
-
-		if err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(loginReq.Password)); err != nil {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid email or password"})
-			return
-		}
-
-		token, err := utils.GenerateToken(user.Id.Hex(), user.Email, user.Role)
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to generate token"})
-			return
-		}
-
-		http.SetCookie(c.Writer, &http.Cookie{
-			Name:     "access_token",
-			Value:    token,
-			MaxAge:   3600 * 24,
-			Path:     "/",
-			HttpOnly: true,
-			Secure:   true,
-			SameSite: http.SameSiteNoneMode,
-		})
-
-		c.JSON(http.StatusOK, gin.H{
-			"message": "Login successful",
-			"user": gin.H{
-				"id":    user.Id.Hex(),
-				"name":  user.UserName,
-				"email": user.Email,
-				"role":  user.Role,
-			},
-		})
-	}
-}
-
-func LogoutUser() gin.HandlerFunc {
-	return func(c *gin.Context) {
-
-		http.SetCookie(c.Writer, &http.Cookie{
-			Name:     "access_token",
-			Value:    "",
-			MaxAge:   -1,
-			Path:     "/",
-			HttpOnly: true,
-			Secure:   true,
-			SameSite: http.SameSiteNoneMode,
-		})
-
-		c.JSON(http.StatusOK, gin.H{
-			"message": "Logged out successfully",
-		})
-	}
-}
-
-func GetMe(client *mongo.Client) gin.HandlerFunc {
-	return func(c *gin.Context) {
-
-		tokenStr, err := c.Cookie("access_token")
-		if err != nil {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "not authenticated"})
-			return
-		}
-
-		claims, err := utils.VerifyToken(tokenStr)
-		if err != nil {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid token"})
-			return
-		}
-
-		userObjId, err := bson.ObjectIDFromHex(claims.UserID)
-		if err != nil {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid user id"})
-			return
-		}
-
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-		defer cancel()
-
-		userCollection := database.OpenCollection("users", client)
-
-		var user models.User
-		if err := userCollection.FindOne(ctx, bson.M{"_id": userObjId}).Decode(&user); err != nil {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "user not found"})
-			return
-		}
-
-		c.JSON(http.StatusOK, gin.H{
-			"id":            user.Id,
-			"username":      user.UserName,
-			"email":         user.Email,
-			"profile_image": user.ProfileImage,
-			"role":          user.Role,
-			"created_at":    user.CreatedAt,
-		})
-	}
-}
