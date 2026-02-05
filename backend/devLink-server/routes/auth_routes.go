@@ -14,7 +14,7 @@ func AuthRoutes(router *gin.Engine,client *mongo.Client){
 
 	auth.POST("/register",controllers.RegisterUser(client));
 	auth.POST("/verify-otp",controllers.VerifyOtp(client));
-	auth.POST("resend-otp",controllers.ResendOtp(client));
+	auth.POST("/resend-otp",controllers.ResendOtp(client));
 	auth.POST("/login",controllers.LoginUser(client));
 	auth.GET("/me",controllers.GetMe(client));
 	auth.POST("/logout",controllers.LogoutUser())

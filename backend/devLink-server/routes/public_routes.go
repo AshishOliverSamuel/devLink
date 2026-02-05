@@ -7,10 +7,9 @@ import (
 )
 
 
-func PublicRoutes(router *gin.Engine,client *mongo.Client){
+func PublicRoutes(router *gin.Engine, client *mongo.Client) {
+	api := router.Group("/api")
 
-
-	router.GET("/home",controllers.GetHomeFeed(client));
-	 router.GET("/posts/:slug", controllers.GetPostBySlug(client))
-
+	api.GET("/home", controllers.GetHomeFeed(client))
+	api.GET("/posts/:slug", controllers.GetPostBySlug(client))
 }
