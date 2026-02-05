@@ -2,7 +2,6 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter, useParams } from "next/navigation";
-import Image from "next/image";
 import { motion } from "framer-motion";
 import { ArrowLeft, Send, Info } from "lucide-react";
 import { apiFetch } from "@/lib/api";
@@ -27,8 +26,9 @@ export default function SendMessageRequestPage() {
   const [checkingStatus, setCheckingStatus] = useState(true);
   const checkedOnce = useRef(false);
 
+  // Fetch receiver profile
   useEffect(() => {
-    apiFetch(`/api/users/${receiverId}`)
+    apiFetch(`/users/${receiverId}`)
       .then((res) => {
         setReceiver({
           id: receiverId,
@@ -42,11 +42,12 @@ export default function SendMessageRequestPage() {
       });
   }, [receiverId]);
 
+  // Check chat request status
   useEffect(() => {
     if (!receiver || checkedOnce.current) return;
     checkedOnce.current = true;
 
-    apiFetch(`/api/chat/request/status/${receiverId}`)
+    apiFetch(`/chat/request/status/${receiverId}`)
       .then((res) => {
         if (res.status === "pending") {
           router.replace(`/chat/pending/${receiverId}`);
@@ -54,12 +55,9 @@ export default function SendMessageRequestPage() {
         }
 
         if (res.status === "accepted") {
-          router.replace(`/api/chat/${res.room_id}`);
+          router.replace(`/chat/${res.room_id}`);
           return;
         }
-
-      })
-      .catch(() => {
       })
       .finally(() => {
         setCheckingStatus(false);
@@ -73,7 +71,7 @@ export default function SendMessageRequestPage() {
       setLoading(true);
       setError("");
 
-      await apiFetch("/api/chat/request", {
+      await apiFetch("/chat/request", {
         method: "POST",
         body: JSON.stringify({
           receiver_id: receiverId,
@@ -81,7 +79,7 @@ export default function SendMessageRequestPage() {
         }),
       });
 
-      router.replace(`/api/chat/pending/${receiverId}`);
+      router.replace(`/chat/pending/${receiverId}`);
     } catch (err: any) {
       setError(err?.error || "Failed to send message request");
     } finally {
@@ -100,7 +98,6 @@ export default function SendMessageRequestPage() {
   return (
     <main className="min-h-screen bg-[#101922] text-white pb-28">
       <div className="max-w-3xl mx-auto px-4">
-
         <header className="sticky top-0 z-40 bg-[#101922]/90 backdrop-blur border-b border-slate-800">
           <div className="flex items-center justify-between py-4">
             <button

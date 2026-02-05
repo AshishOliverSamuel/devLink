@@ -21,7 +21,7 @@ export default function PendingChatPage() {
   const [user, setUser] = useState<User | null>(null);
 
   useEffect(() => {
-    apiFetch(`/api/users/${userId}`)
+    apiFetch(`/users/${userId}`)
       .then((res) => {
         setUser({
           id: userId,
@@ -65,7 +65,6 @@ export default function PendingChatPage() {
       </header>
 
       <div className="flex-1 max-w-md mx-auto w-full px-4 pb-32">
-
         <motion.section
           initial={{ opacity: 0, y: 16 }}
           animate={{ opacity: 1, y: 0 }}

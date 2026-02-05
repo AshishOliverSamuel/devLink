@@ -41,7 +41,6 @@ export default function CreatePostPage() {
       true
     );
 
-    // Track Progress
     xhr.upload.onprogress = (event) => {
       if (event.lengthComputable) {
         const percentComplete = Math.round((event.loaded / event.total) * 100);
@@ -169,7 +168,6 @@ export default function CreatePostPage() {
                 )}
               </div>
 
-              {/* PROGRESS BAR */}
               {uploading && (
                 <div className="absolute bottom-0 left-0 w-full h-1 bg-slate-700">
                   <motion.div
@@ -205,7 +203,6 @@ export default function CreatePostPage() {
           )}
         </motion.div>
 
-        {/* TITLE */}
         <input
           value={title}
           onChange={(e) => setTitle(e.target.value)}
@@ -213,7 +210,6 @@ export default function CreatePostPage() {
           className="w-full bg-transparent text-3xl font-bold outline-none placeholder:text-slate-600"
         />
 
-        {/* TAGS */}
         <div className="space-y-2">
           <p className="text-xs uppercase tracking-wider text-slate-400">
             Tags
@@ -244,7 +240,6 @@ export default function CreatePostPage() {
           </div>
         </div>
 
-        {/* CONTENT */}
         <textarea
           value={content}
           onChange={(e) => setContent(e.target.value)}

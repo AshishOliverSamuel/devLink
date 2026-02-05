@@ -87,18 +87,8 @@ export default function DashboardPage() {
 
     const loadMe = async () => {
       try {
-        const res = await fetch("/auth/me", {
-          credentials: "include",
-          cache: "no-store",
-        });
-
-        if (!res.ok) throw new Error("unauthenticated");
-
-        const data = await res.json();
-
-        if (mounted) {
-          setUser(data);
-        }
+        const data = await apiFetch("/auth/me");
+        if (mounted) setUser(data);
       } catch {
         if (mounted) {
           setUser(null);
@@ -145,12 +135,7 @@ export default function DashboardPage() {
   }, [search]);
 
   const logout = async () => {
-    await fetch("/auth/logout", {
-      method: "POST",
-      credentials: "include",
-      cache: "no-store",
-    });
-
+    await apiFetch("/auth/logout", { method: "POST" });
     window.location.href = "/login";
   };
 

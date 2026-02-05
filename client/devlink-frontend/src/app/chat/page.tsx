@@ -5,7 +5,6 @@ import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { apiFetch } from "@/lib/api";
 
-
 type User = {
   id: string;
   username: string;
@@ -42,7 +41,6 @@ type Request = RawRequest & {
   sender?: User;
 };
 
-
 const formatTime = (date?: string) => {
   if (!date) return "";
   return new Date(date).toLocaleTimeString([], {
@@ -50,7 +48,6 @@ const formatTime = (date?: string) => {
     minute: "2-digit",
   });
 };
-
 
 export default function ChatsPage() {
   const router = useRouter();
@@ -61,9 +58,8 @@ export default function ChatsPage() {
   const [counts, setCounts] = useState({ requests: 0, unread: 0 });
   const [loading, setLoading] = useState(true);
 
-
   const loadCounts = () => {
-    apiFetch("/api/chat/counts")
+    apiFetch("/chat/counts")
       .then((res) => {
         setCounts({
           requests: res?.requests ?? 0,
@@ -77,18 +73,17 @@ export default function ChatsPage() {
     loadCounts();
   }, []);
 
-
   useEffect(() => {
     setLoading(true);
 
     if (tab === "inbox") {
-      apiFetch("/api/chatrooms")
+      apiFetch("/chatrooms")
         .then(async (res) => {
           const raw: RawRoom[] = res?.rooms || [];
 
           const hydrated = await Promise.all(
             raw.map(async (r) => {
-              const u = await apiFetch(`/api/users/${r.user_id}`);
+              const u = await apiFetch(`/users/${r.user_id}`);
 
               return {
                 room_id: r.room_id,
@@ -117,13 +112,13 @@ export default function ChatsPage() {
       return;
     }
 
-    apiFetch("/api/chat/requests")
+    apiFetch("/chat/requests")
       .then(async (res) => {
         const raw: RawRequest[] = Array.isArray(res) ? res : [];
 
         const hydrated = await Promise.all(
           raw.map(async (r) => {
-            const u = await apiFetch(`/api/users/${r.sender_id}`);
+            const u = await apiFetch(`/users/${r.sender_id}`);
             return {
               ...r,
               sender: {
@@ -144,9 +139,8 @@ export default function ChatsPage() {
       });
   }, [tab]);
 
-
   const respond = async (id: string, action: "accept" | "reject") => {
-    await apiFetch(`/api/chat/request/${id}/respond`, {
+    await apiFetch(`/chat/request/${id}/respond`, {
       method: "POST",
       body: JSON.stringify({ action }),
     });
@@ -159,11 +153,9 @@ export default function ChatsPage() {
 
   const totalNotifications = counts.requests + counts.unread;
 
-
   return (
     <main className="min-h-screen bg-[#101922] text-white flex justify-center">
       <div className="w-full max-w-xl">
-
         <header className="sticky top-0 z-40 bg-[#101922]/90 backdrop-blur border-b border-slate-800">
           <div className="flex items-center justify-between p-4">
             <button onClick={() => router.back()}>←</button>
@@ -200,7 +192,6 @@ export default function ChatsPage() {
         </header>
 
         <div className="p-4 space-y-4">
-
           {loading && (
             <>
               <Skeleton />
@@ -215,7 +206,8 @@ export default function ChatsPage() {
             </p>
           )}
 
-          {!loading && tab === "inbox" &&
+          {!loading &&
+            tab === "inbox" &&
             rooms.map((r) => {
               const hasUnread = r.unread > 0;
               const sentByMe = r.last_sender_id !== r.user.id;
@@ -247,15 +239,13 @@ export default function ChatsPage() {
 
                     <div className="flex items-center gap-1 text-sm text-[#92adc9] truncate">
                       {sentByMe && (
-                        <span className="font-semibold text-slate-300 ">
+                        <span className="font-semibold text-slate-300">
                           You
                         </span>
                       )}
-
                       <span className="truncate">
                         {r.last_message || "Say hello..."}
                       </span>
-
                       {myMsgSeen && (
                         <span className="ml-1 text-primary text-xs">✓✓</span>
                       )}
@@ -281,7 +271,8 @@ export default function ChatsPage() {
             </p>
           )}
 
-          {!loading && tab === "requests" &&
+          {!loading &&
+            tab === "requests" &&
             requests.map((r) => (
               <motion.div
                 key={r.id}
@@ -328,7 +319,6 @@ export default function ChatsPage() {
     </main>
   );
 }
-
 
 function Tab({
   children,
