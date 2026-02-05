@@ -12,7 +12,6 @@ type Message = {
   content: string;
   created_at: string;
   seen_at?: string | null;
-  optimistic?: boolean;
 };
 
 type User = {
@@ -22,13 +21,17 @@ type User = {
 };
 
 const formatTime = (date: string) =>
-  new Date(date).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  new Date(date).toLocaleTimeString([], {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
 
 const formatLastSeenSmart = (date?: string) => {
-  if (!date) return "last seen recently";
+  if (!date) return "";
   const d = new Date(date);
   const now = new Date();
   const diffHours = (now.getTime() - d.getTime()) / (1000 * 60 * 60);
+
   const yesterday = new Date();
   yesterday.setDate(now.getDate() - 1);
 
@@ -52,13 +55,33 @@ const formatDateLabel = (date: string) => {
 
   if (d.toDateString() === today.toDateString()) return "Today";
   if (d.toDateString() === yesterday.toDateString()) return "Yesterday";
-
   return d.toLocaleDateString("en-IN", {
     day: "2-digit",
     month: "short",
     year: "numeric",
   });
 };
+
+const HeaderSkeleton = () => (
+  <div className="flex items-center gap-3 animate-pulse">
+    <div className="w-10 h-10 rounded-full bg-slate-300 dark:bg-slate-700" />
+    <div className="space-y-2">
+      <div className="h-3 w-24 bg-slate-300 dark:bg-slate-700 rounded" />
+      <div className="h-2 w-16 bg-slate-200 dark:bg-slate-600 rounded" />
+    </div>
+  </div>
+);
+
+const MessageSkeleton = () => (
+  <div className="space-y-4 animate-pulse">
+    {[1, 2, 3].map((i) => (
+      <div key={i} className="flex gap-3">
+        <div className="h-8 w-8 rounded-full bg-slate-300 dark:bg-slate-700" />
+        <div className="h-4 w-48 rounded-xl bg-slate-300 dark:bg-slate-700" />
+      </div>
+    ))}
+  </div>
+);
 
 export default function ChatRoomPage() {
   const { room_id } = useParams();
@@ -75,7 +98,6 @@ export default function ChatRoomPage() {
 
   const socketRef = useRef<WebSocket | null>(null);
   const bottomRef = useRef<HTMLDivElement | null>(null);
-  const typingTimeout = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
     apiFetch("/auth/me")
@@ -106,22 +128,21 @@ export default function ChatRoomPage() {
   useEffect(() => {
     if (!me) return;
 
-    apiFetch(`/chat/rooms/${room_id}/messages`)
-      .then((msgs: Message[]) => {
-        const sorted = [...msgs].sort(
+    apiFetch(`/chat/rooms/${room_id}`).then((room) => {
+      const other = room.users?.find((u: any) => u.id !== me.id);
+      if (other) fetchOtherUser(other.id);
+    });
+
+    apiFetch(`/chat/rooms/${room_id}/messages`).then((msgs: Message[]) => {
+      setMessages(
+        msgs.sort(
           (a, b) =>
             new Date(a.created_at).getTime() -
             new Date(b.created_at).getTime()
-        );
-        setMessages(sorted);
-
-        const otherId = sorted.find(
-          (m) => m.sender_id !== me.id
-        )?.sender_id;
-
-        if (otherId) fetchOtherUser(otherId);
-      })
-      .finally(() => setLoadingMessages(false));
+        )
+      );
+      setLoadingMessages(false);
+    });
   }, [me, room_id]);
 
   useEffect(() => {
@@ -129,25 +150,20 @@ export default function ChatRoomPage() {
 
     apiFetch("/ws/token").then((res) => {
       const ws = new WebSocket(
-        `${process.env.NEXT_PUBLIC_WS_URL}/api/ws/chat/${room_id}?token=${res.token}`
+        `${process.env.NEXT_PUBLIC_WS_URL}/ws/chat/${room_id}?token=${res.token}`
       );
-
       socketRef.current = ws;
 
       ws.onmessage = (e) => {
         const data = JSON.parse(e.data);
-
         if (data.type === "message") {
-          setMessages((prev) =>
-            prev.some((m) => m.id === data.id) ? prev : [...prev, data]
+          setMessages((p) =>
+            p.some((m) => m.id === data.id) ? p : [...p, data]
           );
         }
-
         if (data.type === "typing" && data.user_id !== me.id)
           setTyping(data.is_typing);
-
         if (data.type === "user_online") setOnline(true);
-
         if (data.type === "user_offline") {
           setOnline(false);
           setLastSeen(data.last_seen);
@@ -162,27 +178,11 @@ export default function ChatRoomPage() {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, typing]);
 
-  const emitTyping = () => {
-    socketRef.current?.send(
-      JSON.stringify({ type: "typing", is_typing: true })
-    );
-
-    if (typingTimeout.current) clearTimeout(typingTimeout.current);
-
-    typingTimeout.current = setTimeout(() => {
-      socketRef.current?.send(
-        JSON.stringify({ type: "typing", is_typing: false })
-      );
-    }, 1200);
-  };
-
   const sendMessage = () => {
-    if (!text.trim() || !me) return;
-
+    if (!text.trim()) return;
     socketRef.current?.send(
       JSON.stringify({ type: "message", content: text })
     );
-
     setText("");
   };
 
@@ -203,7 +203,9 @@ export default function ChatRoomPage() {
           <FiArrowLeft />
         </button>
 
-        {otherUser && (
+        {!otherUser ? (
+          <HeaderSkeleton />
+        ) : (
           <>
             <div
               className="w-10 h-10 rounded-full bg-cover bg-center border relative"
@@ -213,71 +215,65 @@ export default function ChatRoomPage() {
                 <span className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-green-500 rounded-full" />
               )}
             </div>
-
             <div>
               <h2 className="text-sm font-bold">{otherUser.name}</h2>
-              <AnimatePresence mode="wait">
-                {typing ? (
-                  <motion.p
-                    key="typing"
-                    className="text-xs italic"
-                  >
-                    typing…
-                  </motion.p>
-                ) : online ? (
-                  <motion.p key="online" className="text-xs text-green-500">
-                    online
-                  </motion.p>
-                ) : (
-                  <motion.p key="lastseen" className="text-xs">
-                    {formatLastSeenSmart(lastSeen)}
-                  </motion.p>
-                )}
-              </AnimatePresence>
+              <p className="text-xs text-slate-500">
+                {typing
+                  ? "typing…"
+                  : online
+                  ? "online"
+                  : formatLastSeenSmart(lastSeen)}
+              </p>
             </div>
           </>
         )}
       </header>
 
-      <main className="flex-1 overflow-y-auto p-4 space-y-6">
+      <main className="flex-1 overflow-y-auto p-4 pb-28">
         {loadingMessages ? (
-          <p>Loading…</p>
-        ) : messages.length === 0 ? (
-          <p>No messages yet</p>
+          <MessageSkeleton />
+        ) : !messages.length ? (
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="h-full flex items-center justify-center text-center text-sm text-slate-500"
+          >
+            No conversation started yet
+          </motion.div>
         ) : (
           Object.entries(groupedMessages).map(([date, msgs]) => (
-            <div key={date}>
-              <div className="text-center text-xs mb-4">{date}</div>
-              {msgs.map((msg) => {
-                const isMe = msg.sender_id === me?.id;
-                return (
-                  <div
-                    key={msg.id}
-                    className={`flex ${isMe ? "justify-end" : "justify-start"} mb-2`}
-                  >
-                    <div className="px-4 py-2 rounded-xl">
-                      {msg.content}
-                    </div>
+            <div key={date} className="space-y-4">
+              <div className="text-center text-xs text-slate-400">
+                {date}
+              </div>
+              {msgs.map((msg) => (
+                <motion.div
+                  key={msg.id}
+                  initial={{ opacity: 0, y: 6 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className={`max-w-[80%] ${
+                    msg.sender_id === me?.id
+                      ? "ml-auto text-right"
+                      : ""
+                  }`}
+                >
+                  <div className="px-4 py-2 rounded-2xl bg-slate-200 dark:bg-slate-700">
+                    {msg.content}
                   </div>
-                );
-              })}
+                </motion.div>
+              ))}
             </div>
           ))
         )}
         <div ref={bottomRef} />
       </main>
 
-      <footer className="p-4 border-t flex gap-2">
-        <button>
-          <FiPlus />
-        </button>
-        <textarea
+      <footer className="p-4 border-t flex gap-3">
+        <FiPlus />
+        <input
           value={text}
-          onChange={(e) => {
-            setText(e.target.value);
-            emitTyping();
-          }}
-          className="flex-1 resize-none"
+          onChange={(e) => setText(e.target.value)}
+          className="flex-1 outline-none"
           placeholder="Type a message…"
         />
         <button onClick={sendMessage}>
