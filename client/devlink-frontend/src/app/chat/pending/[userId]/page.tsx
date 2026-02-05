@@ -21,7 +21,7 @@ export default function PendingChatPage() {
   const [user, setUser] = useState<User | null>(null);
 
   useEffect(() => {
-    apiFetch(`/users/${userId}`)
+    apiFetch(`/api/users/${userId}`)
       .then((res) => {
         setUser({
           id: userId,
@@ -89,7 +89,6 @@ export default function PendingChatPage() {
           </p>
         </motion.section>
 
-        {/* Timeline */}
         <motion.section
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
@@ -109,7 +108,6 @@ export default function PendingChatPage() {
           </div>
         </motion.section>
 
-        {/* Locked State */}
         <motion.section
           initial={{ opacity: 0, scale: 0.95 }}
           animate={{ opacity: 1, scale: 1 }}

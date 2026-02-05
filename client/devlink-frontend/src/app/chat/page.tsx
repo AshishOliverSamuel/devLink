@@ -42,7 +42,6 @@ type Request = RawRequest & {
   sender?: User;
 };
 
-/* ================= HELPERS ================= */
 
 const formatTime = (date?: string) => {
   if (!date) return "";
@@ -64,7 +63,7 @@ export default function ChatsPage() {
 
 
   const loadCounts = () => {
-    apiFetch("/chat/counts")
+    apiFetch("/api/chat/counts")
       .then((res) => {
         setCounts({
           requests: res?.requests ?? 0,
@@ -83,13 +82,13 @@ export default function ChatsPage() {
     setLoading(true);
 
     if (tab === "inbox") {
-      apiFetch("/chatrooms")
+      apiFetch("/api/chatrooms")
         .then(async (res) => {
           const raw: RawRoom[] = res?.rooms || [];
 
           const hydrated = await Promise.all(
             raw.map(async (r) => {
-              const u = await apiFetch(`/users/${r.user_id}`);
+              const u = await apiFetch(`/api/users/${r.user_id}`);
 
               return {
                 room_id: r.room_id,
@@ -118,13 +117,13 @@ export default function ChatsPage() {
       return;
     }
 
-    apiFetch("/chat/requests")
+    apiFetch("/api/chat/requests")
       .then(async (res) => {
         const raw: RawRequest[] = Array.isArray(res) ? res : [];
 
         const hydrated = await Promise.all(
           raw.map(async (r) => {
-            const u = await apiFetch(`/users/${r.sender_id}`);
+            const u = await apiFetch(`/api/users/${r.sender_id}`);
             return {
               ...r,
               sender: {
@@ -147,7 +146,7 @@ export default function ChatsPage() {
 
 
   const respond = async (id: string, action: "accept" | "reject") => {
-    await apiFetch(`/chat/request/${id}/respond`, {
+    await apiFetch(`/api/chat/request/${id}/respond`, {
       method: "POST",
       body: JSON.stringify({ action }),
     });

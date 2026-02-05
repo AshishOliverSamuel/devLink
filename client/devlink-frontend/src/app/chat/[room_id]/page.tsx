@@ -139,7 +139,7 @@ export default function ChatRoomPage() {
   }, [router]);
 
   const fetchOtherUser = async (userId: string) => {
-    const res = await apiFetch(`/users/${userId}`);
+    const res = await apiFetch(`/api/users/${userId}`);
     setOtherUser({
       id: userId,
       name: res.user.name,
@@ -153,12 +153,12 @@ export default function ChatRoomPage() {
   useEffect(() => {
     if (!me) return;
 
-    apiFetch(`/chat/rooms/${room_id}`).then((room) => {
+    apiFetch(`/api/chat/rooms/${room_id}`).then((room) => {
       const other = room.users?.find((u: any) => u.id !== me.id);
       if (other) fetchOtherUser(other.id);
     });
 
-    apiFetch(`/chat/rooms/${room_id}/messages`)
+    apiFetch(`/api/chat/rooms/${room_id}/messages`)
       .then((msgs: Message[]) => {
         const sorted = [...msgs].sort(
           (a, b) =>
@@ -173,13 +173,13 @@ export default function ChatRoomPage() {
           if (otherId) fetchOtherUser(otherId);
         }
       })
-      .finally(() => setLoadingMessages(false)); // ✅ Stop loading regardless of success/fail
+      .finally(() => setLoadingMessages(false)); 
   }, [me, room_id]);
 
   useEffect(() => {
     if (!me || socketRef.current) return;
 
-    apiFetch("/ws/token").then((res) => {
+    apiFetch("/api/ws/token").then((res) => {
       const ws = new WebSocket(
         `${process.env.NEXT_PUBLIC_WS_URL}/ws/chat/${room_id}?token=${res.token}`
       );

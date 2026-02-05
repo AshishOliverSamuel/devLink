@@ -24,13 +24,11 @@ export default function SendMessageRequestPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
-  // 🔒 page guard
   const [checkingStatus, setCheckingStatus] = useState(true);
   const checkedOnce = useRef(false);
 
-  /* ================= LOAD RECEIVER ================= */
   useEffect(() => {
-    apiFetch(`/users/${receiverId}`)
+    apiFetch(`/api/users/${receiverId}`)
       .then((res) => {
         setReceiver({
           id: receiverId,
@@ -44,36 +42,30 @@ export default function SendMessageRequestPage() {
       });
   }, [receiverId]);
 
-  /* ================= ENFORCE CHAT STATE ================= */
   useEffect(() => {
     if (!receiver || checkedOnce.current) return;
     checkedOnce.current = true;
 
-    apiFetch(`/chat/request/status/${receiverId}`)
+    apiFetch(`/api/chat/request/status/${receiverId}`)
       .then((res) => {
-        // 🚫 pending → must not stay here
         if (res.status === "pending") {
           router.replace(`/chat/pending/${receiverId}`);
           return;
         }
 
-        // ✅ accepted → go to chat
         if (res.status === "accepted") {
-          router.replace(`/chat/${res.room_id}`);
+          router.replace(`/api/chat/${res.room_id}`);
           return;
         }
 
-        // status === "none" → allow send request page
       })
       .catch(() => {
-        // fail-open (do not block UI)
       })
       .finally(() => {
         setCheckingStatus(false);
       });
   }, [receiver, receiverId, router]);
 
-  /* ================= SEND REQUEST ================= */
   const sendRequest = async () => {
     if (loading || message.trim().length === 0) return;
 
@@ -81,7 +73,7 @@ export default function SendMessageRequestPage() {
       setLoading(true);
       setError("");
 
-      await apiFetch("/chat/request", {
+      await apiFetch("/api/chat/request", {
         method: "POST",
         body: JSON.stringify({
           receiver_id: receiverId,
@@ -89,7 +81,7 @@ export default function SendMessageRequestPage() {
         }),
       });
 
-      router.replace(`/chat/pending/${receiverId}`);
+      router.replace(`/api/chat/pending/${receiverId}`);
     } catch (err: any) {
       setError(err?.error || "Failed to send message request");
     } finally {
@@ -97,7 +89,6 @@ export default function SendMessageRequestPage() {
     }
   };
 
-  /* ================= BLOCK UI UNTIL STATE IS KNOWN ================= */
   if (!receiver || checkingStatus) {
     return (
       <div className="min-h-screen bg-[#101922] flex items-center justify-center text-[#92adc9]">
@@ -106,12 +97,10 @@ export default function SendMessageRequestPage() {
     );
   }
 
-  /* ================= UI ================= */
   return (
     <main className="min-h-screen bg-[#101922] text-white pb-28">
       <div className="max-w-3xl mx-auto px-4">
 
-        {/* HEADER */}
         <header className="sticky top-0 z-40 bg-[#101922]/90 backdrop-blur border-b border-slate-800">
           <div className="flex items-center justify-between py-4">
             <button
@@ -132,7 +121,6 @@ export default function SendMessageRequestPage() {
           </div>
         </header>
 
-        {/* RECEIVER CARD */}
         <motion.section
           initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
@@ -157,7 +145,6 @@ export default function SendMessageRequestPage() {
           </div>
         </motion.section>
 
-        {/* MESSAGE INPUT */}
         <section className="mt-6">
           <div className="flex justify-between mb-2">
             <p className="font-medium">Personal Message</p>
@@ -174,7 +161,6 @@ export default function SendMessageRequestPage() {
           />
         </section>
 
-        {/* INFO */}
         <div className="mt-6 flex gap-3 bg-primary/10 border border-primary/20 rounded-lg p-4">
           <Info className="text-primary shrink-0" />
           <p className="text-sm text-[#92adc9]">
