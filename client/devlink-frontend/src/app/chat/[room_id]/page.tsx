@@ -76,12 +76,12 @@ const ChatSkeleton = () => (
     animate={{ opacity: 1 }}
     className="space-y-6 animate-pulse"
   >
-    {[1, 2, 3].map((i) => (
-      <div key={i} className="flex gap-3">
-        <div className="w-8 h-8 rounded-full bg-slate-300 dark:bg-slate-700" />
-        <div className="space-y-2">
-          <div className="h-4 w-48 bg-slate-300 dark:bg-slate-700 rounded-xl" />
-          <div className="h-3 w-20 bg-slate-200 dark:bg-slate-600 rounded" />
+    {[1, 2, 3, 4, 5].map((i) => (
+      <div key={i} className={`flex gap-3 ${i % 2 === 0 ? "flex-row-reverse" : ""}`}>
+        <div className="w-8 h-8 rounded-full bg-slate-300 dark:bg-slate-700 shrink-0" />
+        <div className={`space-y-2 flex flex-col ${i % 2 === 0 ? "items-end" : ""}`}>
+          <div className="h-10 w-48 bg-slate-300 dark:bg-slate-700 rounded-xl" />
+          <div className="h-3 w-12 bg-slate-200 dark:bg-slate-600 rounded" />
         </div>
       </div>
     ))}
@@ -114,6 +114,7 @@ export default function ChatRoomPage() {
   const [me, setMe] = useState<User | null>(null);
   const [otherUser, setOtherUser] = useState<User | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
+  const [loadingMessages, setLoadingMessages] = useState(true); 
   const [text, setText] = useState("");
   const [online, setOnline] = useState(false);
   const [lastSeen, setLastSeen] = useState<string | undefined>();
@@ -157,20 +158,22 @@ export default function ChatRoomPage() {
       if (other) fetchOtherUser(other.id);
     });
 
-    apiFetch(`/chat/rooms/${room_id}/messages`).then((msgs: Message[]) => {
-      const sorted = [...msgs].sort(
-        (a, b) =>
-          new Date(a.created_at).getTime() -
-          new Date(b.created_at).getTime()
-      );
-      setMessages(sorted);
-      if (!otherUser) {
-        const otherId = sorted.find(
-          (m) => m.sender_id !== me.id
-        )?.sender_id;
-        if (otherId) fetchOtherUser(otherId);
-      }
-    });
+    apiFetch(`/chat/rooms/${room_id}/messages`)
+      .then((msgs: Message[]) => {
+        const sorted = [...msgs].sort(
+          (a, b) =>
+            new Date(a.created_at).getTime() -
+            new Date(b.created_at).getTime()
+        );
+        setMessages(sorted);
+        if (!otherUser) {
+          const otherId = sorted.find(
+            (m) => m.sender_id !== me.id
+          )?.sender_id;
+          if (otherId) fetchOtherUser(otherId);
+        }
+      })
+      .finally(() => setLoadingMessages(false)); // ✅ Stop loading regardless of success/fail
   }, [me, room_id]);
 
   useEffect(() => {
@@ -300,11 +303,10 @@ export default function ChatRoomPage() {
       </header>
 
       <main className="flex-1 overflow-y-auto p-4 space-y-6 pb-28">
-        {!messages.length ? (
-          <>
-            <ChatSkeleton />
-            <EmptyChatState />
-          </>
+        {loadingMessages ? (
+          <ChatSkeleton />
+        ) : messages.length === 0 ? (
+          <EmptyChatState />
         ) : (
           Object.entries(groupedMessages).map(([date, msgs]) => (
             <div key={date} className="space-y-4">
