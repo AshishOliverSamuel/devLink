@@ -40,6 +40,28 @@ const getReadTime = (content: string) =>
 const isValidImage = (url?: string): url is string =>
   typeof url === "string" && url.startsWith("http");
 
+const PostSkeleton = () => (
+  <div className="max-w-4xl mx-auto px-4 py-8 animate-pulse">
+    <div className="w-full h-[220px] sm:h-[350px] lg:h-[450px] bg-white/5 rounded-xl mb-10" />
+    <div className="max-w-3xl">
+      <div className="h-8 w-3/4 bg-white/5 rounded mb-4" />
+      <div className="h-8 w-1/2 bg-white/5 rounded mb-10" />
+      <div className="flex items-center gap-3 mb-10">
+        <div className="w-10 h-10 rounded-full bg-white/5" />
+        <div className="space-y-2">
+          <div className="h-3 w-24 bg-white/5 rounded" />
+          <div className="h-2 w-32 bg-white/5 rounded" />
+        </div>
+      </div>
+      <div className="space-y-4">
+        <div className="h-4 w-full bg-white/5 rounded" />
+        <div className="h-4 w-full bg-white/5 rounded" />
+        <div className="h-4 w-5/6 bg-white/5 rounded" />
+      </div>
+    </div>
+  </div>
+);
+
 export default function PostPage() {
   const { slug } = useParams<{ slug: string }>();
   const router = useRouter();
@@ -72,22 +94,6 @@ export default function PostPage() {
     load();
   }, [slug]);
 
-  if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-[#020617] text-slate-400">
-        Loading…
-      </div>
-    );
-  }
-
-  if (!post) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-[#020617] text-slate-400">
-        Post not found
-      </div>
-    );
-  }
-
   const handleShare = async () => {
     try {
       await navigator.clipboard.writeText(window.location.href);
@@ -119,119 +125,123 @@ export default function PostPage() {
         </div>
       </header>
 
-      <div className="max-w-4xl mx-auto px-4 py-8">
-        <motion.article
-          initial={{ opacity: 0, y: 6 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.25 }}
-        >
-          {/* COVER IMAGE */}
-          {isValidImage(post.image_url) && (
-            <Card className="mb-10 bg-[#020617] border-white/10 overflow-hidden">
-              <CardContent className="p-0">
-                <div className="relative w-full h-[220px] sm:h-[350px] lg:h-[450px]">
-                  <Image
-                    src={post.image_url}
-                    alt={post.title}
-                    fill
-                    priority
-                    className="object-cover"
-                  />
-                </div>
-              </CardContent>
-            </Card>
-          )}
-
-          <div className="max-w-3xl">
-            {/* TITLE */}
-            <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold tracking-tight mb-4">
-              {post.title}
-            </h1>
-
-            {/* AUTHOR COMPONENT WITH INCREASED MARGIN (mb-10) */}
-            <div className="flex items-center gap-3 mb-10">
-              <img
-                src={
-                  post.author.profile_image ||
-                  `https://api.dicebear.com/7.x/initials/svg?seed=${post.author.username}`
-                }
-                onClick={() => router.push(`/users/${post.author.id}`)}
-                className="w-10 h-10 rounded-full object-cover border border-white/10 cursor-pointer"
-              />
-
-              <div className="text-sm">
-                <p
-                  onClick={() => router.push(`/users/${post.author.id}`)}
-                  className="font-medium cursor-pointer hover:text-blue-400"
-                >
-                  @{post.author.username}
-                </p>
-                <p className="text-slate-400 text-xs">
-                  {formatDate(post.created_at)} • {getReadTime(post.content)} •{" "}
-                  {post.view_count} views
-                </p>
-              </div>
-            </div>
-
-            {/* TAGS */}
-            {post.tags?.length && (
-              <div className="flex flex-wrap gap-2 mb-8">
-                {post.tags.map((tag) => (
-                  <span
-                    key={tag}
-                    className="text-xs font-medium px-3 py-1 rounded-full bg-blue-500/10 text-blue-400"
-                  >
-                    #{tag}
-                  </span>
-                ))}
-              </div>
+      {loading ? (
+        <PostSkeleton />
+      ) : !post ? (
+        <div className="min-h-[50vh] flex items-center justify-center text-slate-400">
+          Post not found
+        </div>
+      ) : (
+        <div className="max-w-4xl mx-auto px-4 py-8">
+          <motion.article
+            initial={{ opacity: 0, y: 6 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.25 }}
+          >
+            {isValidImage(post.image_url) && (
+              <Card className="mb-10 bg-[#020617] border-white/10 overflow-hidden shadow-2xl">
+                <CardContent className="p-0 leading-[0]">
+                  <div className="relative w-full h-[220px] sm:h-[350px] lg:h-[450px]">
+                    <Image
+                      src={post.image_url}
+                      alt={post.title}
+                      fill
+                      priority
+                      className="object-cover object-center"
+                    />
+                  </div>
+                </CardContent>
+              </Card>
             )}
 
-            {/* CONTENT */}
-            <div className="text-slate-300 leading-relaxed space-y-4 whitespace-pre-line">
-              {post.content}
-            </div>
+            <div className="max-w-3xl">
+              <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold tracking-tight mb-4">
+                {post.title}
+              </h1>
 
-            {/* SUGGESTED */}
-            {suggested.length > 0 && (
-              <section className="mt-24 pt-10 border-t border-white/5">
-                <h3 className="text-lg font-semibold mb-6">
-                  Recommended for you
-                </h3>
+              <div className="flex items-center gap-3 mb-10">
+                <img
+                  src={
+                    post.author.profile_image ||
+                    `https://api.dicebear.com/7.x/initials/svg?seed=${post.author.username}`
+                  }
+                  onClick={() => router.push(`/users/${post.author.id}`)}
+                  className="w-10 h-10 rounded-full object-cover border border-white/10 cursor-pointer"
+                />
 
-                <div className="space-y-6">
-                  {suggested.map((p) => (
-                    <div
-                      key={p.id}
-                      onClick={() => router.push(`/post/${p.slug}`)}
-                      className="flex gap-4 cursor-pointer group"
+                <div className="text-sm">
+                  <p
+                    onClick={() => router.push(`/users/${post.author.id}`)}
+                    className="font-medium cursor-pointer hover:text-blue-400"
+                  >
+                    @{post.author.username}
+                  </p>
+                  <p className="text-slate-400 text-xs">
+                    {formatDate(post.created_at)} • {getReadTime(post.content)} •{" "}
+                    {post.view_count} views
+                  </p>
+                </div>
+              </div>
+
+              {/* TAGS */}
+              {post.tags?.length && (
+                <div className="flex flex-wrap gap-2 mb-8">
+                  {post.tags.map((tag) => (
+                    <span
+                      key={tag}
+                      className="text-xs font-medium px-3 py-1 rounded-full bg-blue-500/10 text-blue-400"
                     >
-                      <div className="flex-1">
-                        <h4 className="font-semibold group-hover:text-blue-400 transition line-clamp-2">
-                          {p.title}
-                        </h4>
-                        <p className="text-xs text-slate-400 mt-1 line-clamp-2">
-                          {p.content}
-                        </p>
-                      </div>
-
-                      {isValidImage(p.image_url) && (
-                        <Image
-                          src={p.image_url}
-                          alt={p.title}
-                          width={80}
-                          height={80}
-                          className="w-20 h-20 object-cover rounded-md border border-white/5"
-                        />
-                      )}
-                    </div>
+                      #{tag}
+                    </span>
                   ))}
                 </div>
-              </section>
-            )}
-          </div>
-        </motion.article>
-      </div>
+              )}
+
+              <div className="text-slate-300 leading-relaxed space-y-4 whitespace-pre-line">
+                {post.content}
+              </div>
+
+              {suggested.length > 0 && (
+                <section className="mt-24 pt-10 border-t border-white/5">
+                  <h3 className="text-lg font-semibold mb-6">
+                    Recommended for you
+                  </h3>
+
+                  <div className="space-y-6">
+                    {suggested.map((p) => (
+                      <div
+                        key={p.id}
+                        onClick={() => router.push(`/post/${p.slug}`)}
+                        className="flex gap-4 cursor-pointer group"
+                      >
+                        <div className="flex-1">
+                          <h4 className="font-semibold group-hover:text-blue-400 transition line-clamp-2">
+                            {p.title}
+                          </h4>
+                          <p className="text-xs text-slate-400 mt-1 line-clamp-2">
+                            {p.content}
+                          </p>
+                        </div>
+
+                        {isValidImage(p.image_url) && (
+                          <div className="relative w-20 h-20 shrink-0">
+                            <Image
+                              src={p.image_url}
+                              alt={p.title}
+                              fill
+                              className="object-cover rounded-md border border-white/5"
+                            />
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </section>
+              )}
+            </div>
+          </motion.article>
+        </div>
+      )}
     </main>
   );
 }
