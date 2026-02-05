@@ -22,8 +22,8 @@ const nextConfig = {
         destination: `${backend}/api/:path*`,
       },
       {
-        source: "/api/ws/:path*",
-        destination: `${backend}/api/ws/:path*`,
+        source: "/ws/:path*",
+        destination: `${backend}/ws/:path*`,
       },
     ];
   },

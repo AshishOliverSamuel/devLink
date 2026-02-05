@@ -1,14 +1,11 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 
-// Pages that require a logged-in user
 const PROTECTED_ROUTES = [
   "/dashboard",
   "/chat",
   "/create-post",
-  "/search",
   "/update-profile",
-  "/users",
 ];
 
 const AUTH_ROUTES = ["/login", "/register", "/verify-otp"];
@@ -21,8 +18,10 @@ export function middleware(req: NextRequest) {
     return NextResponse.redirect(new URL("/dashboard", req.url));
   }
 
-  const isProtectedRoute = PROTECTED_ROUTES.some((route) => pathname.startsWith(route));
-  
+  const isProtectedRoute = PROTECTED_ROUTES.some((route) =>
+    pathname.startsWith(route)
+  );
+
   if (!token && isProtectedRoute) {
     const loginUrl = new URL("/login", req.url);
     loginUrl.searchParams.set("next", pathname);
@@ -33,6 +32,5 @@ export function middleware(req: NextRequest) {
 }
 
 export const config = {
- 
   matcher: ["/((?!_next/static|_next/image|favicon.ico|public).*)"],
 };
