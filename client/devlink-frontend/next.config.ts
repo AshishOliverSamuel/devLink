@@ -20,23 +20,28 @@ const nextConfig = {
         hostname: "i.pravatar.cc",
       },
       {
-        protocol: 'https',
-        hostname: 'res.cloudinary.com',
-        pathname: '/**',
+        protocol: "https",
+        hostname: "res.cloudinary.com",
+        pathname: "/**",
       },
     ],
   },
 
   async rewrites() {
+    const backend =
+      process.env.NODE_ENV === "production"
+        ? "https://your-backend.onrender.com"
+        : "http://localhost:8080";
+
     return [
       {
         source: "/api/:path*",
-        destination: "http://localhost:8080/:path*",
+        destination: `${backend}/:path*`,
       },
 
       {
         source: "/ws/:path*",
-        destination: "http://localhost:8080/ws/:path*",
+        destination: `${backend}/ws/:path*`,
       },
     ];
   },
