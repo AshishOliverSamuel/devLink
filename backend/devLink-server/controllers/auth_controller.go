@@ -22,12 +22,56 @@ import (
 )
 
 
+
 func cookieDomain() string {
 	if os.Getenv("ENV") == "production" {
 		return ".onrender.com"
 	}
-	return "localhost"
+	return "" 
 }
+
+func setAuthCookie(c *gin.Context, token string) {
+	isProd := os.Getenv("ENV") == "production"
+
+	http.SetCookie(c.Writer, &http.Cookie{
+		Name:     "access_token",
+		Value:    token,
+		MaxAge:   60 * 60 * 24,
+		Path:     "/",
+		Domain:   cookieDomain(),
+		HttpOnly: true,
+		Secure:   isProd,
+		SameSite: func() http.SameSite {
+			if isProd {
+				return http.SameSiteNoneMode
+			}
+			return http.SameSiteLaxMode
+		}(),
+	})
+}
+
+func clearAuthCookie(c *gin.Context) {
+	isProd := os.Getenv("ENV") == "production"
+
+	http.SetCookie(c.Writer, &http.Cookie{
+		Name:     "access_token",
+		Value:    "",
+		MaxAge:   -1,
+		Path:     "/",
+		Domain:   cookieDomain(),
+		HttpOnly: true,
+		Secure:   isProd,
+		SameSite: func() http.SameSite {
+			if isProd {
+				return http.SameSiteNoneMode
+			}
+			return http.SameSiteLaxMode
+		}(),
+	})
+}
+
+
+
 
 func GenerateOTP() string {
 	max := big.NewInt(1000000)
@@ -45,6 +89,7 @@ func HashPassword(password string) (string, error) {
 	}
 	return string(bytes), nil
 }
+
 
 
 func RegisterUser(client *mongo.Client) gin.HandlerFunc {
@@ -186,17 +231,7 @@ func VerifyOtp(client *mongo.Client) gin.HandlerFunc {
 		}
 
 		token, _ := utils.GenerateToken(user.Id.Hex(), user.Email, user.Role)
-
-		http.SetCookie(c.Writer, &http.Cookie{
-			Name:     "access_token",
-			Value:    token,
-			MaxAge:   3600 * 24,
-			Path:     "/",
-			Domain:   cookieDomain(), 
-			HttpOnly: true,
-			Secure:   true,
-			SameSite: http.SameSiteNoneMode,
-		})
+		setAuthCookie(c, token)
 
 		c.JSON(http.StatusOK, gin.H{
 			"message": "Account verified and logged in",
@@ -241,17 +276,7 @@ func LoginUser(client *mongo.Client) gin.HandlerFunc {
 		}
 
 		token, _ := utils.GenerateToken(user.Id.Hex(), user.Email, user.Role)
-
-		http.SetCookie(c.Writer, &http.Cookie{
-			Name:     "access_token",
-			Value:    token,
-			MaxAge:   3600 * 24,
-			Path:     "/",
-			Domain:   cookieDomain(), 
-			HttpOnly: true,
-			Secure:   true,
-			SameSite: http.SameSiteNoneMode,
-		})
+		setAuthCookie(c, token)
 
 		c.JSON(http.StatusOK, gin.H{
 			"message": "Login successful",
@@ -262,17 +287,7 @@ func LoginUser(client *mongo.Client) gin.HandlerFunc {
 
 func LogoutUser() gin.HandlerFunc {
 	return func(c *gin.Context) {
-
-		http.SetCookie(c.Writer, &http.Cookie{
-			Name:     "access_token",
-			Value:    "",
-			MaxAge:   -1,
-			Path:     "/",
-			Domain:   cookieDomain(), 
-			HttpOnly: true,
-			Secure:   true,
-			SameSite: http.SameSiteNoneMode,
-		})
+		clearAuthCookie(c)
 
 		c.JSON(http.StatusOK, gin.H{
 			"message": "Logged out successfully",
@@ -319,6 +334,8 @@ func GetMe(client *mongo.Client) gin.HandlerFunc {
 		})
 	}
 }
+
+
 func ResendOtp(client *mongo.Client) gin.HandlerFunc {
 	return func(c *gin.Context) {
 
@@ -369,7 +386,6 @@ func ResendOtp(client *mongo.Client) gin.HandlerFunc {
 
 		if err := utils.SendOTPEmail(user.Email, newOtp); err != nil {
 			log.Println("RESEND OTP EMAIL FAILED:", err)
-
 			c.JSON(http.StatusInternalServerError, gin.H{
 				"error": "Failed to send OTP email. Please try again.",
 			})
@@ -381,4 +397,3 @@ func ResendOtp(client *mongo.Client) gin.HandlerFunc {
 		})
 	}
 }
-
