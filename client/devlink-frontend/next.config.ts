@@ -18,19 +18,16 @@ const nextConfig = {
 
     return [
       {
-
         source: "/auth/:path*",
         destination: `${backend}/auth/:path*`,
       },
       {
-
-        source: "/api/:path*",
-        destination: `${backend}/:path*`,
-      },
-      {
-        
         source: "/ws/:path*",
         destination: `${backend}/ws/:path*`,
+      },
+      {
+        source: "/(posts|home|search|users|chatrooms|createpost|update-profile)/:path*",
+        destination: `${backend}/:path*`,
       },
     ];
   },
