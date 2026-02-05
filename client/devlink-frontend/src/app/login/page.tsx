@@ -25,7 +25,7 @@ export default function Page() {
       });
 
       toast.success("Welcome back!");
-      router.push("/dashboard");
+    window.location.href = "/dashboard";
     } catch (err: any) {
       console.log("LOGIN ERROR 👉", err);
 
