@@ -8,7 +8,6 @@ import toast from "react-hot-toast";
 import { apiFetch } from "@/lib/api";
 import { FiCamera, FiCheck } from "react-icons/fi";
 
-/* ================= TYPES ================= */
 
 type User = {
   username: string;
@@ -16,7 +15,6 @@ type User = {
   profile_image?: string;
 };
 
-/* ================= IMAGE CROP UTILS ================= */
 
 const createImage = (url: string): Promise<HTMLImageElement> =>
   new Promise((resolve, reject) => {
@@ -51,7 +49,6 @@ async function getCroppedImage(src: string, area: any): Promise<Blob> {
   );
 }
 
-/* ================= PAGE ================= */
 
 export default function UpdateProfilePage() {
   const router = useRouter();

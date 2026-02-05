@@ -8,8 +8,6 @@ import { useRouter } from "next/navigation";
 import {
   FiMoreVertical,
   FiEdit2,
-  FiArchive,
-  FiTrash2,
   FiEye,
   FiMail,
   FiX,
@@ -38,7 +36,6 @@ ChartJS.register(
   Legend
 );
 
-
 type User = {
   id: string;
   username: string;
@@ -55,7 +52,6 @@ type Post = {
   view_count: number;
   published: boolean;
 };
-
 
 export default function MyProfilePage() {
   const router = useRouter();
@@ -81,15 +77,12 @@ export default function MyProfilePage() {
   }, []);
 
   if (loading || !user) {
-    return (
-      <div className="min-h-screen bg-[#101922] flex items-center justify-center text-[#92adc9]">
-        Loading profile…
-      </div>
-    );
+    return <ProfileSkeleton />;
   }
 
   const totalViews = posts.reduce((a, b) => a + b.view_count, 0);
   const devPoints = Math.floor(totalViews / 10);
+  const list = tab === "posts" ? posts : archive;
 
   const refresh = async () => {
     const [p, a] = await Promise.all([
@@ -102,7 +95,6 @@ export default function MyProfilePage() {
 
   const updatePost = async (data: Partial<Post>) => {
     if (!editing) return;
-
     await apiFetch(`/updatepost/${editing.id}`, {
       method: "PUT",
       body: JSON.stringify({
@@ -113,7 +105,6 @@ export default function MyProfilePage() {
         tags: [],
       }),
     });
-
     setEditing(null);
     refresh();
   };
@@ -139,11 +130,8 @@ export default function MyProfilePage() {
     refresh();
   };
 
-  const list = tab === "posts" ? posts : archive;
-
   return (
     <main className="min-h-screen bg-[#101922] px-3 lg:px-8 pb-24">
-      {/* PROFILE */}
       <div className="max-w-6xl mx-auto pt-6">
         <div className="flex flex-col lg:flex-row gap-6">
           <div className="flex gap-4 items-center">
@@ -157,7 +145,6 @@ export default function MyProfilePage() {
 
             <div>
               <p className="text-2xl font-bold text-white">@{user.username}</p>
-
               <div className="flex items-center gap-2 text-[#92adc9] text-sm">
                 <FiMail /> {user.email}
               </div>
@@ -169,8 +156,7 @@ export default function MyProfilePage() {
                 className="mt-4 inline-flex items-center gap-2
                   bg-[#137fec] hover:bg-[#0f6ad4]
                   text-white text-sm font-semibold
-                  px-3 py-1.5 rounded-lg
-                  shadow-md transition-colors"
+                  px-3 py-1.5 rounded-lg"
               >
                 <FiEdit2 size={14} />
                 Update Profile
@@ -188,11 +174,7 @@ export default function MyProfilePage() {
         <div className="flex gap-6 mt-8 border-b border-slate-800">
           <Tab label="Posts" active={tab === "posts"} onClick={() => setTab("posts")} />
           <Tab label="Archive" active={tab === "archive"} onClick={() => setTab("archive")} />
-          <Tab
-            label="Analytics"
-            active={tab === "analytics"}
-            onClick={() => setTab("analytics")}
-          />
+          <Tab label="Analytics" active={tab === "analytics"} onClick={() => setTab("analytics")} />
         </div>
       </div>
 
@@ -228,27 +210,52 @@ export default function MyProfilePage() {
   );
 }
 
+/* -------------------- SKELETON -------------------- */
 
-function PostCard({
-  post,
-  onEdit,
-  onArchive,
-  onPublish,
-  onDelete,
-}: {
-  post: Post;
-  onEdit: () => void;
-  onArchive: () => void;
-  onPublish: () => void;
-  onDelete: () => void;
-}) {
+function ProfileSkeleton() {
+  return (
+    <div className="min-h-screen bg-[#101922] px-3 lg:px-8 pb-24 animate-pulse">
+      <div className="max-w-6xl mx-auto pt-6">
+        <div className="flex flex-col lg:flex-row gap-6">
+          <div className="flex gap-4 items-center">
+            <div className="w-20 h-20 rounded-full bg-slate-700" />
+            <div className="space-y-3">
+              <div className="h-6 w-40 bg-slate-700 rounded" />
+              <div className="h-4 w-52 bg-slate-700 rounded" />
+              <div className="h-8 w-32 bg-slate-700 rounded" />
+            </div>
+          </div>
+
+          <div className="flex gap-4 lg:ml-auto">
+            {[1, 2, 3].map((i) => (
+              <div key={i} className="w-24 h-16 bg-slate-700 rounded-xl" />
+            ))}
+          </div>
+        </div>
+
+        <div className="flex gap-6 mt-8">
+          {[1, 2, 3].map((i) => (
+            <div key={i} className="h-8 w-24 bg-slate-700 rounded" />
+          ))}
+        </div>
+      </div>
+
+      <div className="max-w-6xl mx-auto mt-6 grid grid-cols-1 lg:grid-cols-2 gap-4">
+        {[1, 2, 3, 4].map((i) => (
+          <div key={i} className="h-48 bg-slate-700 rounded-xl" />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/* -------------------- REMAINING COMPONENTS -------------------- */
+
+function PostCard({ post, onEdit, onArchive, onPublish, onDelete }: any) {
   const [open, setOpen] = useState(false);
 
   return (
-    <motion.div
-      whileHover={{ scale: 1.01 }}
-      className="bg-[#192633] rounded-xl border border-slate-800 relative"
-    >
+    <motion.div className="bg-[#192633] rounded-xl border border-slate-800 relative">
       {post.image_url && (
         <div className="relative aspect-video">
           <Image src={post.image_url} alt="" fill className="object-cover" />
@@ -258,25 +265,9 @@ function PostCard({
       <div className="p-4 space-y-2">
         <div className="flex justify-between">
           <h3 className="text-white font-bold">{post.title || "Untitled"}</h3>
-
           <button onClick={() => setOpen(!open)}>
             <FiMoreVertical />
           </button>
-
-          {open && (
-            <div className="absolute right-4 top-10 w-40 bg-[#101922]
-              border border-slate-800 rounded-xl z-50 shadow-xl">
-              {post.published ? (
-                <>
-                  <MenuItem label="Edit" onClick={onEdit} />
-                  <MenuItem label="Archive" onClick={onArchive} />
-                </>
-              ) : (
-                <MenuItem label="Publish" onClick={onPublish} />
-              )}
-              <MenuItem label="Delete" danger onClick={onDelete} />
-            </div>
-          )}
         </div>
 
         <p className="text-sm text-[#92adc9] line-clamp-2">
@@ -290,7 +281,6 @@ function PostCard({
     </motion.div>
   );
 }
-
 
 function AnalyticsSection({ posts }: { posts: Post[] }) {
   const labels = posts.map((_, i) => `Post ${i + 1}`);
@@ -332,7 +322,6 @@ function AnalyticsSection({ posts }: { posts: Post[] }) {
   );
 }
 
-
 function Stat({ label, value }: { label: string; value: number }) {
   return (
     <div className="bg-[#192633] px-4 py-3 rounded-xl text-center">
@@ -342,15 +331,7 @@ function Stat({ label, value }: { label: string; value: number }) {
   );
 }
 
-function Tab({
-  label,
-  active,
-  onClick,
-}: {
-  label: string;
-  active: boolean;
-  onClick: () => void;
-}) {
+function Tab({ label, active, onClick }: any) {
   return (
     <button
       onClick={onClick}
@@ -365,54 +346,14 @@ function Tab({
   );
 }
 
-function MenuItem({
-  label,
-  danger,
-  onClick,
-}: {
-  label: string;
-  danger?: boolean;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      onClick={onClick}
-      className={`w-full px-4 py-2 text-sm text-left ${
-        danger ? "text-red-400" : "text-white"
-      } hover:bg-slate-800`}
-    >
-      {label}
-    </button>
-  );
-}
-
-
-function EditorModal({
-  post,
-  onClose,
-  onSave,
-}: {
-  post: Post;
-  onClose: () => void;
-  onSave: (data: Partial<Post>) => void;
-}) {
+function EditorModal({ post, onClose, onSave }: any) {
   const [title, setTitle] = useState(post.title);
   const [content, setContent] = useState(post.content);
   const [image, setImage] = useState(post.image_url || "");
 
   return (
-    <motion.div
-      className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center px-3"
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
-    >
-      <motion.div
-        initial={{ scale: 0.9 }}
-        animate={{ scale: 1 }}
-        exit={{ scale: 0.9 }}
-        className="bg-[#101922] rounded-xl max-w-lg w-full p-5 space-y-4"
-      >
+    <motion.div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center px-3">
+      <motion.div className="bg-[#101922] rounded-xl max-w-lg w-full p-5 space-y-4">
         <div className="flex justify-between">
           <p className="text-white font-bold">Edit Post</p>
           <button onClick={onClose}>
@@ -424,7 +365,6 @@ function EditorModal({
           value={title}
           onChange={(e) => setTitle(e.target.value)}
           className="w-full bg-[#192633] px-3 py-2 rounded-lg text-white"
-          placeholder="Title"
         />
 
         <textarea
@@ -432,33 +372,16 @@ function EditorModal({
           onChange={(e) => setContent(e.target.value)}
           rows={5}
           className="w-full bg-[#192633] px-3 py-2 rounded-lg text-white"
-          placeholder="Content"
         />
 
         <input
           value={image}
           onChange={(e) => setImage(e.target.value)}
           className="w-full bg-[#192633] px-3 py-2 rounded-lg text-white"
-          placeholder="Image URL"
         />
 
-        {image && (
-          <button
-            onClick={() => setImage("")}
-            className="text-red-400 text-sm"
-          >
-            Remove image
-          </button>
-        )}
-
         <button
-          onClick={() =>
-            onSave({
-              title,
-              content,
-              image_url: image || "",
-            })
-          }
+          onClick={() => onSave({ title, content, image_url: image })}
           className="w-full bg-primary py-2 rounded-lg text-white font-bold"
         >
           Update Post
