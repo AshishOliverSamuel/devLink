@@ -19,7 +19,7 @@ func main() {
 	router.Use(cors.New(cors.Config{
 		AllowOrigins: []string{
 			"http://localhost:3000",
-			"https://your-vercel-app.vercel.app", 
+			"https://dev-link-o6lg.vercel.app", 
 		},
 		AllowMethods: []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
 		AllowHeaders: []string{"Content-Type", "Authorization"},
