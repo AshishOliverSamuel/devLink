@@ -16,7 +16,7 @@ func SendOTPEmail(toEmail string, otp string) error {
 	}
 
 	smtpHost := "smtp.gmail.com"
-	smtpPort := "587"
+	smtpPort := "465"
 
 	subject := "DevLink • Verify your email"
 
