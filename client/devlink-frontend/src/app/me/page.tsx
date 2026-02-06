@@ -388,7 +388,7 @@ function EditorModal({ post, onClose, onSave }: any) {
         </button>
       </motion.div>
 
-      <AppFooter />
+
     </motion.div>
   );
 }
