@@ -11,6 +11,7 @@ import {
   FiEye,
   FiMail,
   FiX,
+  FiArrowLeft,
 } from "react-icons/fi";
 
 import {
@@ -24,7 +25,6 @@ import {
   Legend,
 } from "chart.js";
 import { Line, Bar } from "react-chartjs-2";
-import AppFooter from "@/components/ui/AppFooter";
 
 ChartJS.register(
   CategoryScale,
@@ -132,6 +132,20 @@ export default function MyProfilePage() {
 
   return (
     <main className="min-h-screen bg-[#101922] px-3 lg:px-8 pb-24">
+      <button
+        onClick={() => router.back()}
+        className="fixed top-4 left-4 z-50
+          flex items-center gap-1
+          text-white text-sm
+          bg-[#192633] hover:bg-[#233548]
+          px-3 py-2 rounded-lg
+          border border-slate-800"
+      >
+        <FiArrowLeft />
+        
+        Back
+      </button>
+
       <div className="max-w-6xl mx-auto pt-6">
         <div className="flex flex-col lg:flex-row gap-6">
           <div className="flex gap-4 items-center">
@@ -210,7 +224,6 @@ export default function MyProfilePage() {
   );
 }
 
-/* -------------------- SKELETON -------------------- */
 
 function ProfileSkeleton() {
   return (
@@ -249,7 +262,6 @@ function ProfileSkeleton() {
   );
 }
 
-/* -------------------- REMAINING COMPONENTS -------------------- */
 
 function PostCard({ post, onEdit, onArchive, onPublish, onDelete }: any) {
   const [open, setOpen] = useState(false);
