@@ -8,7 +8,7 @@ import (
 	"math/big"
 	"net/http"
 	"net/url"
-	"os"
+	
 	"time"
 
 	"github.com/ayushmehta03/devLink-backend/database"
@@ -21,16 +21,11 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
-
-
 func cookieDomain() string {
 	return ""
 }
 
-
 func setAuthCookie(c *gin.Context, token string) {
-	isProd := os.Getenv("ENV") == "production"
-
 	http.SetCookie(c.Writer, &http.Cookie{
 		Name:     "access_token",
 		Value:    token,
@@ -38,19 +33,12 @@ func setAuthCookie(c *gin.Context, token string) {
 		Path:     "/",
 		Domain:   cookieDomain(),
 		HttpOnly: true,
-		Secure:   isProd,
-		SameSite: func() http.SameSite {
-			if isProd {
-				return http.SameSiteNoneMode
-			}
-			return http.SameSiteLaxMode
-		}(),
+		Secure:   true,                    
+		SameSite: http.SameSiteNoneMode,    
 	})
 }
 
 func clearAuthCookie(c *gin.Context) {
-	isProd := os.Getenv("ENV") == "production"
-
 	http.SetCookie(c.Writer, &http.Cookie{
 		Name:     "access_token",
 		Value:    "",
@@ -58,18 +46,10 @@ func clearAuthCookie(c *gin.Context) {
 		Path:     "/",
 		Domain:   cookieDomain(),
 		HttpOnly: true,
-		Secure:   isProd,
-		SameSite: func() http.SameSite {
-			if isProd {
-				return http.SameSiteNoneMode
-			}
-			return http.SameSiteLaxMode
-		}(),
+		Secure:   true,                    
+		SameSite: http.SameSiteNoneMode,    
 	})
 }
-
-
-
 
 func GenerateOTP() string {
 	max := big.NewInt(1000000)
@@ -87,8 +67,6 @@ func HashPassword(password string) (string, error) {
 	}
 	return string(bytes), nil
 }
-
-
 
 func RegisterUser(client *mongo.Client) gin.HandlerFunc {
 	return func(c *gin.Context) {
@@ -173,7 +151,6 @@ func RegisterUser(client *mongo.Client) gin.HandlerFunc {
 	}
 }
 
-
 func VerifyOtp(client *mongo.Client) gin.HandlerFunc {
 	return func(c *gin.Context) {
 
@@ -237,7 +214,6 @@ func VerifyOtp(client *mongo.Client) gin.HandlerFunc {
 	}
 }
 
-
 func LoginUser(client *mongo.Client) gin.HandlerFunc {
 	return func(c *gin.Context) {
 
@@ -282,7 +258,6 @@ func LoginUser(client *mongo.Client) gin.HandlerFunc {
 	}
 }
 
-
 func LogoutUser() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		clearAuthCookie(c)
@@ -294,9 +269,6 @@ func LogoutUser() gin.HandlerFunc {
 		})
 	}
 }
-
-
-
 
 func GetMe(client *mongo.Client) gin.HandlerFunc {
 	return func(c *gin.Context) {
@@ -336,7 +308,6 @@ func GetMe(client *mongo.Client) gin.HandlerFunc {
 		})
 	}
 }
-
 
 func ResendOtp(client *mongo.Client) gin.HandlerFunc {
 	return func(c *gin.Context) {

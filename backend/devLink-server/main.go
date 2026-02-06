@@ -38,13 +38,20 @@ func main() {
 		AllowHeaders: []string{
 			"Content-Type",
 			"Authorization",
+			"Accept",
+			"Origin",
+			"Cookie",
 			"Upgrade",
 			"Connection",
 			"Sec-WebSocket-Key",
 			"Sec-WebSocket-Version",
 			"Sec-WebSocket-Extensions",
 		},
+		ExposeHeaders: []string{
+			"Set-Cookie",
+		},
 		AllowCredentials: true,
+		MaxAge:           12 * 60 * 60, 
 	}))
 
 	client := database.Connect()
@@ -58,7 +65,6 @@ func main() {
 	routes.AuthRoutes(router, client)
 	routes.PublicRoutes(router, client)
 	routes.ProtectedRoutes(router, client)
-
 	routes.WebSocketRoutes(router, client)
 
 	port := os.Getenv("PORT")
