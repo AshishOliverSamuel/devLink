@@ -81,7 +81,6 @@ export default function ChatRoomPage() {
   const bottomRef = useRef<HTMLDivElement | null>(null);
   const typingTimeout = useRef<NodeJS.Timeout | null>(null);
 
-  /* -------------------- AUTH -------------------- */
   useEffect(() => {
     apiFetch("/auth/me")
       .then((res) => {
@@ -96,13 +95,11 @@ export default function ChatRoomPage() {
       .catch(() => router.push("/login"));
   }, [router]);
 
-  /* -------------------- LOAD HEADER USER (FIXED) -------------------- */
   useEffect(() => {
     if (!me || otherUser) return;
     fetchOtherUserFromRoom();
-  }, [me, room_id]); // ✅ FIX: room_id added
+  }, [me, room_id]); 
 
-  /* -------------------- LOAD MESSAGES -------------------- */
   useEffect(() => {
     if (!me) return;
 
