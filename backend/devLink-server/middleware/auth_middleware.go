@@ -45,7 +45,6 @@ func AuthMiddleWare() gin.HandlerFunc {
 			return
 		}
 
-		// 🔓 Set user data in context
 		c.Set("user_id", claims["user_id"])
 		c.Set("email", claims["email"])
 		c.Set("role", claims["role"])
