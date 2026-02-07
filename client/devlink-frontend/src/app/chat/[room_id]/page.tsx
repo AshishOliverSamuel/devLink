@@ -76,8 +76,6 @@ export default function ChatRoomPage() {
   const [online, setOnline] = useState(false);
   const [lastSeen, setLastSeen] = useState<string | undefined>();
   const [typing, setTyping] = useState(false);
-
-  // 🔹 ADDED (header loading state)
   const [loadingHeader, setLoadingHeader] = useState(true);
 
   const socketRef = useRef<WebSocket | null>(null);
@@ -116,7 +114,7 @@ export default function ChatRoomPage() {
         )?.sender_id;
 
         if (otherId) fetchOtherUser(otherId);
-        if (!sorted.length) fetchOtherUserFromRoom(); // ✅ ADDED
+        if (!sorted.length) fetchOtherUserFromRoom();
       }
     );
   }, [me, room_id]);
@@ -130,13 +128,10 @@ export default function ChatRoomPage() {
         res.user.profile_image ||
         "https://ui-avatars.com/api/?name=User",
     });
-    if (res.user.last_seen) {
-      setLastSeen(res.user.last_seen);
-    }
-    setLoadingHeader(false); // ✅ ADDED
+    if (res.user.last_seen) setLastSeen(res.user.last_seen);
+    setLoadingHeader(false);
   };
 
-  // 🔹 ADDED (fallback when no messages exist)
   const fetchOtherUserFromRoom = async () => {
     try {
       const room = await apiFetch(`/chat/rooms/${room_id}`);
@@ -155,11 +150,8 @@ export default function ChatRoomPage() {
           "https://ui-avatars.com/api/?name=User",
       });
 
-      if (other.last_seen) {
-        setLastSeen(other.last_seen);
-      }
-      setLoadingHeader(false);
-    } catch {
+      if (other.last_seen) setLastSeen(other.last_seen);
+    } finally {
       setLoadingHeader(false);
     }
   };
@@ -168,64 +160,68 @@ export default function ChatRoomPage() {
     if (!me || socketRef.current) return;
 
     const connectWS = async () => {
-      try {
-        const res = await apiFetch("/ws/token");
-        const wsToken = res.token;
-        const WS_BASE_URL =
-          process.env.NEXT_PUBLIC_WS_URL ||
-          "ws://localhost:8080";
-        const ws = new WebSocket(
-          `${WS_BASE_URL}/ws/chat/${room_id}?token=${wsToken}`
+      const res = await apiFetch("/ws/token");
+      const ws = new WebSocket(
+        `${process.env.NEXT_PUBLIC_WS_URL || "ws://localhost:8080"}/ws/chat/${room_id}?token=${res.token}`
+      );
+
+      socketRef.current = ws;
+
+      ws.onopen = () => {
+        ws.send(
+          JSON.stringify({ type: "user_online", user_id: me.id })
         );
+      };
 
-        socketRef.current = ws;
+      ws.onmessage = (e) => {
+        const data = JSON.parse(e.data);
 
-        ws.onopen = () => {
-          ws.send(
-            JSON.stringify({
-              type: "user_online",
-              user_id: me.id,
-            })
-          );
-        };
+        switch (data.type) {
+          case "message":
+            setMessages((prev) => {
+              // already exists
+              if (prev.some((m) => m.id === data.id)) return prev;
 
-        ws.onmessage = (e) => {
-          const data = JSON.parse(e.data);
-          switch (data.type) {
-            case "message":
-              setMessages((prev) => {
-                if (prev.some((m) => m.id === data.id))
-                  return prev;
-                return [...prev, data];
-              });
-              break;
-            case "typing":
-              if (data.user_id !== me.id)
-                setTyping(data.is_typing);
-              break;
-            case "user_online":
-              if (data.user_id !== me.id)
-                setOnline(true);
-              break;
-            case "user_offline":
-              if (data.user_id !== me.id) {
-                setOnline(false);
-                setLastSeen(data.last_seen);
+              // replace optimistic message
+              const optimisticIndex = prev.findIndex(
+                (m) =>
+                  m.optimistic &&
+                  m.sender_id === data.sender_id &&
+                  m.content === data.content
+              );
+
+              if (optimisticIndex !== -1) {
+                const updated = [...prev];
+                updated[optimisticIndex] = data;
+                return updated;
               }
-              break;
-          }
-        };
-      } catch (err) {
-        console.error("❌ Failed to connect WebSocket", err);
-      }
+
+              // normal incoming message
+              return [...prev, data];
+            });
+            break;
+
+          case "typing":
+            if (data.user_id !== me.id)
+              setTyping(data.is_typing);
+            break;
+
+          case "user_online":
+            if (data.user_id !== me.id) setOnline(true);
+            break;
+
+          case "user_offline":
+            if (data.user_id !== me.id) {
+              setOnline(false);
+              setLastSeen(data.last_seen);
+            }
+            break;
+        }
+      };
     };
 
     connectWS();
-
-    return () => {
-      socketRef.current?.close();
-      socketRef.current = null;
-    };
+    return () => socketRef.current?.close();
   }, [me, room_id]);
 
   useEffect(() => {
@@ -247,6 +243,7 @@ export default function ChatRoomPage() {
 
   const sendMessage = () => {
     if (!text.trim() || !me) return;
+
     setMessages((prev) => [
       ...prev,
       {
@@ -257,6 +254,7 @@ export default function ChatRoomPage() {
         optimistic: true,
       },
     ]);
+
     socketRef.current?.send(
       JSON.stringify({ type: "message", content: text })
     );
@@ -281,6 +279,8 @@ export default function ChatRoomPage() {
     return map;
   }, [messages]);
 
+
+
   return (
     <div className="flex flex-col h-screen bg-background-light dark:bg-background-dark">
       <header className="sticky top-0 z-50 flex items-center gap-3 px-4 py-3 border-b backdrop-blur">
@@ -288,7 +288,6 @@ export default function ChatRoomPage() {
           <FiArrowLeft />
         </button>
 
-        {/* 🔹 HEADER SKELETON */}
         {loadingHeader && (
           <div className="flex items-center gap-3 animate-pulse">
             <div className="w-10 h-10 rounded-full bg-slate-300 dark:bg-slate-700" />
