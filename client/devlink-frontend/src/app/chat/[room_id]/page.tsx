@@ -96,7 +96,13 @@ export default function ChatRoomPage() {
       .catch(() => router.push("/login"));
   }, [router]);
 
-  /* -------------------- LOAD MESSAGES + USER -------------------- */
+  /* -------------------- LOAD HEADER USER (FIXED) -------------------- */
+  useEffect(() => {
+    if (!me || otherUser) return;
+    fetchOtherUserFromRoom();
+  }, [me, room_id]); // ✅ FIX: room_id added
+
+  /* -------------------- LOAD MESSAGES -------------------- */
   useEffect(() => {
     if (!me) return;
 
@@ -114,7 +120,6 @@ export default function ChatRoomPage() {
           (m) => m.sender_id !== me.id
         )?.sender_id;
 
-        // ✅ FIX #1: ALWAYS load other user
         if (otherId) {
           fetchOtherUser(otherId);
         } else {
@@ -227,7 +232,7 @@ export default function ChatRoomPage() {
     return () => socketRef.current?.close();
   }, [me, room_id]);
 
-  /* -------------------- ✅ FIX #2: SEEN LOGIC -------------------- */
+  /* -------------------- SEEN LOGIC -------------------- */
   useEffect(() => {
     if (!me || !messages.length) return;
 
@@ -297,6 +302,7 @@ export default function ChatRoomPage() {
     return map;
   }, [messages]);
 
+ 
 
   return (
     <div className="flex flex-col h-screen bg-background-light dark:bg-background-dark">
