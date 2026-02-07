@@ -69,7 +69,6 @@ export default function ChatRoomPage() {
   const router = useRouter();
 
   const [me, setMe] = useState<User | null>(null);
-  const [myLastSeen, setMyLastSeen] = useState<string | undefined>();
   const [otherUser, setOtherUser] = useState<User | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [text, setText] = useState("");
@@ -82,6 +81,7 @@ export default function ChatRoomPage() {
   const bottomRef = useRef<HTMLDivElement | null>(null);
   const typingTimeout = useRef<NodeJS.Timeout | null>(null);
 
+  /* -------------------- AUTH -------------------- */
   useEffect(() => {
     apiFetch("/auth/me")
       .then((res) => {
@@ -92,11 +92,11 @@ export default function ChatRoomPage() {
             res.profile_image ||
             "https://ui-avatars.com/api/?name=Me",
         });
-        setMyLastSeen(res.last_seen);
       })
       .catch(() => router.push("/login"));
   }, [router]);
 
+  /* -------------------- LOAD MESSAGES + USER -------------------- */
   useEffect(() => {
     if (!me) return;
 
@@ -107,14 +107,19 @@ export default function ChatRoomPage() {
             new Date(a.created_at).getTime() -
             new Date(b.created_at).getTime()
         );
+
         setMessages(sorted);
 
         const otherId = sorted.find(
           (m) => m.sender_id !== me.id
         )?.sender_id;
 
-        if (otherId) fetchOtherUser(otherId);
-        if (!sorted.length) fetchOtherUserFromRoom();
+        // ✅ FIX #1: ALWAYS load other user
+        if (otherId) {
+          fetchOtherUser(otherId);
+        } else {
+          fetchOtherUserFromRoom();
+        }
       }
     );
   }, [me, room_id]);
@@ -156,6 +161,7 @@ export default function ChatRoomPage() {
     }
   };
 
+  /* -------------------- WEBSOCKET -------------------- */
   useEffect(() => {
     if (!me || socketRef.current) return;
 
@@ -179,10 +185,8 @@ export default function ChatRoomPage() {
         switch (data.type) {
           case "message":
             setMessages((prev) => {
-              // already exists
               if (prev.some((m) => m.id === data.id)) return prev;
 
-              // replace optimistic message
               const optimisticIndex = prev.findIndex(
                 (m) =>
                   m.optimistic &&
@@ -196,7 +200,6 @@ export default function ChatRoomPage() {
                 return updated;
               }
 
-              // normal incoming message
               return [...prev, data];
             });
             break;
@@ -223,6 +226,21 @@ export default function ChatRoomPage() {
     connectWS();
     return () => socketRef.current?.close();
   }, [me, room_id]);
+
+  /* -------------------- ✅ FIX #2: SEEN LOGIC -------------------- */
+  useEffect(() => {
+    if (!me || !messages.length) return;
+
+    const hasUnseen = messages.some(
+      (m) => m.sender_id !== me.id && !m.seen_at
+    );
+
+    if (hasUnseen) {
+      apiFetch(`/chat/rooms/${room_id}/seen`, {
+        method: "POST",
+      }).catch(() => {});
+    }
+  }, [messages, me, room_id]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -278,7 +296,6 @@ export default function ChatRoomPage() {
     });
     return map;
   }, [messages]);
-
 
 
   return (
