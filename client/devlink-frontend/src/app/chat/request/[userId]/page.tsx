@@ -26,7 +26,6 @@ export default function SendMessageRequestPage() {
   const [checkingStatus, setCheckingStatus] = useState(true);
   const checkedOnce = useRef(false);
 
-  // Fetch receiver profile
   useEffect(() => {
     apiFetch(`/users/${receiverId}`)
       .then((res) => {
@@ -42,7 +41,6 @@ export default function SendMessageRequestPage() {
       });
   }, [receiverId]);
 
-  // Check chat request status
   useEffect(() => {
     if (!receiver || checkedOnce.current) return;
     checkedOnce.current = true;

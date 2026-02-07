@@ -167,7 +167,7 @@ export default function DashboardPage() {
                 <FiBell />
               </button>
               <button
-                onClick={() => router.push(`/users/${user.id}`)}
+                onClick={() => router.push('/me')}
                 className="h-10 w-10 rounded-full overflow-hidden border border-slate-700 hover:border-primary transition"
               >
                 <img
