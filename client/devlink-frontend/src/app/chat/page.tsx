@@ -101,13 +101,7 @@ export default function ChatsPage() {
             })
           );
 
-          const sorted = [...hydrated].sort((a, b) => {
-            const aTime = a.updated_at ? new Date(a.updated_at).getTime() : 0;
-            const bTime = b.updated_at ? new Date(b.updated_at).getTime() : 0;
-            return bTime - aTime;
-          });
-
-          setRooms(sorted);
+          setRooms(hydrated);
           setLoading(false);
         })
         .catch(() => {
@@ -144,45 +138,6 @@ export default function ChatsPage() {
         setLoading(false);
       });
   }, [tab]);
-
-  useEffect(() => {
-    const ws = new WebSocket(
-      `${process.env.NEXT_PUBLIC_WS_URL}/ws/chat`
-    );
-
-    ws.onmessage = (event) => {
-      const data = JSON.parse(event.data);
-
-      setRooms((prev) => {
-        let touched = false;
-
-        const updated = prev.map((room) => {
-          if (room.room_id !== data.room_id) return room;
-
-          touched = true;
-          const isMine = data.sender_id !== room.user.id;
-
-          return {
-            ...room,
-            last_message: data.message,
-            last_sender_id: data.sender_id,
-            updated_at: data.created_at,
-            unread: isMine ? room.unread + 1 : room.unread,
-          };
-        });
-
-        if (!touched) return prev;
-
-        return [...updated].sort((a, b) => {
-          const aTime = a.updated_at ? new Date(a.updated_at).getTime() : 0;
-          const bTime = b.updated_at ? new Date(b.updated_at).getTime() : 0;
-          return bTime - aTime;
-        });
-      });
-    };
-
-    return () => ws.close();
-  }, []);
 
   const respond = async (id: string, action: "accept" | "reject") => {
     await apiFetch(`/chat/request/${id}/respond`, {
@@ -245,6 +200,12 @@ export default function ChatsPage() {
             </>
           )}
 
+          {!loading && tab === "inbox" && rooms.length === 0 && (
+            <p className="text-slate-400 text-center mt-10">
+              No conversations yet
+            </p>
+          )}
+
           {!loading &&
             tab === "inbox" &&
             rooms.map((r) => {
@@ -254,7 +215,6 @@ export default function ChatsPage() {
 
               return (
                 <motion.div
-                  layout
                   key={r.room_id}
                   whileHover={{ scale: 1.01 }}
                   onClick={() => router.push(`/chat/${r.room_id}`)}
@@ -271,6 +231,7 @@ export default function ChatsPage() {
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center justify-between">
                       <p className="font-bold truncate">@{r.user.username}</p>
+
                       {!sentByMe && hasUnread && (
                         <span className="w-2.5 h-2.5 rounded-full bg-primary" />
                       )}
@@ -303,6 +264,56 @@ export default function ChatsPage() {
                 </motion.div>
               );
             })}
+
+          {!loading && tab === "requests" && requests.length === 0 && (
+            <p className="text-slate-400 text-center mt-10">
+              No pending requests
+            </p>
+          )}
+
+          {!loading &&
+            tab === "requests" &&
+            requests.map((r) => (
+              <motion.div
+                key={r.id}
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="bg-[#192633] border border-slate-800 rounded-xl p-4"
+              >
+                <div className="flex gap-4">
+                  <img
+                    onClick={() => router.push(`/users/${r.sender?.id}`)}
+                    src={
+                      r.sender?.profile_image ||
+                      `https://api.dicebear.com/7.x/initials/svg?seed=${r.sender?.username}`
+                    }
+                    className="w-14 h-14 rounded-full border border-primary/40 cursor-pointer"
+                  />
+
+                  <div className="flex-1">
+                    <p className="font-bold">@{r.sender?.username}</p>
+                    <p className="text-sm text-[#92adc9] italic">
+                      “{r.msg}”
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex gap-3 mt-4">
+                  <button
+                    onClick={() => respond(r.id, "reject")}
+                    className="flex-1 h-10 rounded-lg bg-slate-700"
+                  >
+                    Decline
+                  </button>
+                  <button
+                    onClick={() => respond(r.id, "accept")}
+                    className="flex-1 h-10 rounded-lg bg-primary"
+                  >
+                    Accept
+                  </button>
+                </div>
+              </motion.div>
+            ))}
         </div>
       </div>
     </main>
