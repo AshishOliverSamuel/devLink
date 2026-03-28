@@ -4,7 +4,7 @@ DevLink is a **full-stack web application** built for developers to **write blog
 
 The project focuses on **clean backend architecture, secure authentication, and real-time systems**.
 
----
+
 
 ## ✨ Key Features
 
@@ -16,7 +16,7 @@ The project focuses on **clean backend architecture, secure authentication, and 
 - Role-based access control
 - Proper CORS configuration for cross-origin cookies
 
----
+
 
 ### 📝 Blogging Platform
 - Create, update, and delete posts
